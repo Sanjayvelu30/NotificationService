@@ -11,7 +11,7 @@ A highly resilient, production-grade Go notification scheduler and queue service
 - **Partial Indexing**: Leverages targeted database indexes (`WHERE status = 'PENDING'`) to limit search ranges, keeping index sizes small and RAM-resident even at millions of logs.
 
 ### 2. Distributed Resiliency
-- **Exponential Backoff**: Delays retries dynamically ($2^{\text{retry\_count}}$ seconds) on transit delivery faults to protect downstream partner servers.
+- **Exponential Backoff**: Delays retries dynamically (2<sup>retry_count</sup> seconds) on transit delivery faults to protect downstream partner servers.
 - **Dead Letter Queue (DLQ)**: Quarantines persistent failures in an isolated archival table for diagnostic logs audits.
 
 ### 3. Identity & API Security
