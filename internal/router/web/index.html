@@ -770,6 +770,13 @@
                 
                 databaseTemplates = await response.json();
                 
+                // Auto-seed defaults if templates list is empty
+                if (Object.keys(databaseTemplates).length === 0) {
+                    logToTerminal("SYSTEM: No templates found. Auto-seeding defaults (WELCOME, MFA)...", "info");
+                    await seedDefaultTemplates();
+                    return;
+                }
+                
                 templateSelect.innerHTML = "";
                 Object.keys(databaseTemplates).forEach(name => {
                     const option = document.createElement("option");
@@ -782,6 +789,45 @@
             } catch (err) {
                 showError("Could not fetch templates: " + err.message);
                 logToTerminal(`ERROR: Could not load templates: ${err.message}`, "error");
+            }
+        }
+
+        async function seedDefaultTemplates() {
+            const defaults = [
+                { name: "WELCOME", body: "Hi {{name}}, welcome to our platform! We are thrilled to have you." },
+                { name: "MFA", body: "Your security verification code is {{code}}. It will expire in 5 minutes." }
+            ];
+            for (const t of defaults) {
+                try {
+                    await fetch("/api/v1/templates", {
+                        method: "POST",
+                        headers: { 
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify(t)
+                    });
+                } catch (e) {
+                    console.error("Failed to seed template " + t.name, e);
+                }
+            }
+            // Re-fetch templates once seeded
+            const response = await fetch("/api/v1/templates", {
+                headers: {
+                    "Authorization": `Bearer ${accessToken}`
+                }
+            });
+            if (response.ok) {
+                databaseTemplates = await response.json();
+                templateSelect.innerHTML = "";
+                Object.keys(databaseTemplates).forEach(name => {
+                    const option = document.createElement("option");
+                    option.value = name;
+                    option.textContent = name;
+                    templateSelect.appendChild(option);
+                });
+                updateVariables();
+                logToTerminal("SYSTEM: Default templates successfully seeded into PostgreSQL.", "success");
             }
         }
 
