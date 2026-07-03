@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Hub Dashboard</title>
+    <!-- Modern Premium Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --glass-bg: rgba(17, 25, 40, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-orange: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 10% 10%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 90% 90%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.05em;
+            background: linear-gradient(to right, #3b82f6, #60a5fa, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            font-size: 1rem;
+        }
+
+        /* Glass Cards */
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.75rem;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        }
+
+        .variable-inputs {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed var(--glass-border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .variable-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Action Buttons */
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.875rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Metrics & Status Badges */
+        .info-card {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info-card-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .info-card-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-pending {
+            background-color: rgba(156, 163, 175, 0.15);
+            color: #d1d5db;
+        }
+
+        .badge-processing {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: #fca5a5;
+            animation: pulse 1.5s infinite;
+        }
+
+        .badge-sent {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #a7f3d0;
+        }
+
+        .badge-dlq {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        /* History Table */
+        .table-container {
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.875rem;
+        }
+
+        th {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        td {
+            color: var(--text-primary);
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.01);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 2rem;
+            font-size: 0.9rem;
+        }
+
+        /* Notifications Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background-color: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #a7f3d0;
+        }
+
+        .alert-error {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>⚡ Notification Hub</h1>
+            <p>Monolithic micro-engine running with Fixed Window rate limiting and background queues</p>
+        </header>
+
+        <div class="alert alert-success" id="successAlert">Notification dispatched successfully!</div>
+        <div class="alert alert-error" id="errorAlert">Validation error occurred.</div>
+
+        <div class="dashboard-grid">
+            <!-- Left Side: Dispatch Form -->
+            <div class="card">
+                <h2>Send Notification</h2>
+                <form id="dispatchForm">
+                    <div class="form-group">
+                        <label for="recipient">Recipient (Email or Phone)</label>
+                        <input type="text" id="recipient" placeholder="e.g. user@example.com" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="type">Channel Type</label>
+                        <select id="type" required>
+                            <option value="EMAIL">Email</option>
+                            <option value="SMS">SMS</option>
+                            <option value="PUSH">Push Notification</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="template">Template</label>
+                        <select id="template" required>
+                            <option value="WELCOME">WELCOME (Welcome user)</option>
+                            <option value="MFA">MFA (Multi-factor token)</option>
+                            <option value="PASSWORD_RESET">PASSWORD_RESET (Reset link)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Template Variables</label>
+                        <div class="variable-inputs" id="variableFields">
+                            <!-- Populated dynamically based on template selection -->
+                        </div>
+                    </div>
+
+                    <button type="submit" id="submitBtn">
+                        Dispatch Notification
+                    </button>
+                </form>
+            </div>
+
+            <!-- Right Side: Limit Tracking & History -->
+            <div class="card">
+                <h2>Local Environment Controls</h2>
+                
+                <div class="info-card">
+                    <span class="info-card-label">Rate Limiter Limit</span>
+                    <span class="info-card-value">Max 3 requests / 24 hours per IP</span>
+                </div>
+
+                <h2>Recent Dispatched Activity</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Recipient</th>
+                                <th>Type</th>
+                                <th>Template</th>
+                                <th>Retries</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- Loaded via memory storage -->
+                        </tbody>
+                    </table>
+                    <div class="empty-state" id="emptyState">No notifications sent in this session yet.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const templatesVariables = {
+            "WELCOME": ["name"],
+            "MFA": ["code"],
+            "PASSWORD_RESET": ["link"]
+        };
+
+        const form = document.getElementById("dispatchForm");
+        const templateSelect = document.getElementById("template");
+        const variableFieldsDiv = document.getElementById("variableFields");
+        const historyTableBody = document.getElementById("historyTableBody");
+        const emptyState = document.getElementById("emptyState");
+        const successAlert = document.getElementById("successAlert");
+        const errorAlert = document.getElementById("errorAlert");
+
+        // Keep track of dispatched items in this tab's memory to poll their status
+        let localHistory = [];
+
+        // Update variable inputs when template option is changed
+        function updateVariables() {
+            const template = templateSelect.value;
+            const fields = templatesVariables[template] || [];
+            variableFieldsDiv.innerHTML = "";
+            
+            fields.forEach(field => {
+                const label = document.createElement("label");
+                label.textContent = `Variable: ${field}`;
+                const input = document.createElement("input");
+                input.type = "text";
+                input.dataset.key = field;
+                input.placeholder = `Enter value for ${field}`;
+                input.required = true;
+                
+                const wrapper = document.createElement("div");
+                wrapper.className = "form-group";
+                wrapper.appendChild(label);
+                wrapper.appendChild(input);
+                variableFieldsDiv.appendChild(wrapper);
+            });
+        }
+
+        templateSelect.addEventListener("change", updateVariables);
+        updateVariables(); // Initialize variables inputs
+
+        // Submit form handler
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            successAlert.style.display = "none";
+            errorAlert.style.display = "none";
+
+            const recipient = document.getElementById("recipient").value.trim();
+            const type = document.getElementById("type").value;
+            const template = templateSelect.value;
+
+            // Collect dynamic variables
+            const variable = {};
+            const inputs = variableFieldsDiv.querySelectorAll("input");
+            inputs.forEach(input => {
+                variable[input.dataset.key] = input.value.trim();
+            });
+
+            try {
+                const response = await fetch("/api/v1/notifications", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ recipient, type, template, variable })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Failed to create notification");
+                }
+
+                // Add to tracker list
+                localHistory.unshift(data);
+                updateHistoryTable();
+                
+                // Show success message
+                successAlert.textContent = `Notification enqueued successfully! ID: ${data.id}`;
+                successAlert.style.display = "block";
+
+                // Poll status every second
+                startPolling(data.id);
+
+            } catch (err) {
+                errorAlert.textContent = err.message;
+                errorAlert.style.display = "block";
+            }
+        });
+
+        // Update local logs table view
+        function updateHistoryTable() {
+            if (localHistory.length === 0) {
+                emptyState.style.display = "block";
+                return;
+            }
+            emptyState.style.display = "none";
+            historyTableBody.innerHTML = "";
+
+            localHistory.forEach(item => {
+                const tr = document.createElement("tr");
+
+                const tdRecipient = document.createElement("td");
+                tdRecipient.textContent = item.recipient;
+                tr.appendChild(tdRecipient);
+
+                const tdType = document.createElement("td");
+                tdType.textContent = item.type;
+                tr.appendChild(tdType);
+
+                const tdTemplate = document.createElement("td");
+                tdTemplate.textContent = item.template;
+                tr.appendChild(tdTemplate);
+
+                const tdRetries = document.createElement("td");
+                tdRetries.textContent = item.retry_count;
+                tr.appendChild(tdRetries);
+
+                const tdStatus = document.createElement("td");
+                const badge = document.createElement("span");
+                badge.className = `badge badge-${item.status.toLowerCase()}`;
+                badge.textContent = item.status;
+                tdStatus.appendChild(badge);
+                tr.appendChild(tdStatus);
+
+                historyTableBody.appendChild(tr);
+            });
+        }
+
+        // Poll API for pending/processing status transitions
+        function startPolling(id) {
+            const timer = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/v1/notifications/${id}`);
+                    if (!response.ok) return;
+
+                    const currentItem = await response.json();
+                    
+                    // Update matching element in local storage
+                    const index = localHistory.findIndex(item => item.id === id);
+                    if (index !== -1) {
+                        localHistory[index] = currentItem;
+                        updateHistoryTable();
+
+                        // Stop polling once the status resolves to SENT or DLQ
+                        if (currentItem.status === "SENT" || currentItem.status === "DLQ") {
+                            clearInterval(timer);
+                        }
+                    }
+                } catch (e) {
+                    console.error("error polling status: ", e);
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

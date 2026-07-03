@@ -14,6 +14,7 @@ import (
 	"github.com/sanjay/NotificationService/internal/database"
 	"github.com/sanjay/NotificationService/internal/domain"
 	"github.com/sanjay/NotificationService/internal/handler"
+	"github.com/sanjay/NotificationService/internal/ratelimit"
 	"github.com/sanjay/NotificationService/internal/repository/postgres"
 	"github.com/sanjay/NotificationService/internal/router"
 	"github.com/sanjay/NotificationService/internal/service"
@@ -48,6 +49,15 @@ func main() {
 	dlqRepo := postgres.NewDLQRepository(pool)
 	idempotencyRepo := postgres.NewInMemoryIdempotencyRepository()
 
+	// Initialize the Fixed Window Rate Limiter
+	rlConfig := ratelimit.RateLimitConfig{
+		MaxTokens: cfg.RateLimitMax,
+		Duration:  cfg.RateLimitDuration,
+	}
+	rlRepo := ratelimit.NewInMemoryRateLimitRepo(rlConfig)
+	rlSystem := ratelimit.NewRateLimitSystem(rlRepo)
+	rlMiddleware := ratelimit.RateLimitMiddleware(rlSystem)
+
 	system := &service.NotificationSystem{
 		WorkerCount:         cfg.WorkerCount,
 		MaxRetryCount:       3,
@@ -69,7 +79,7 @@ func main() {
 	go system.RetryScheduler()
 
 	notificationHandler := handler.NewNotificationHandler(system)
-	engine := router.New(notificationHandler)
+	engine := router.New(notificationHandler, rlMiddleware)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
