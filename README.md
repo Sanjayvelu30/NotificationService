@@ -28,10 +28,11 @@ curl -X POST http://localhost:8080/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
     "recipient": "user@example.com",
-    "channel": "email",
-    "subject": "Hello",
-    "body": "World",
-    "max_retries": 3
+    "template": "WELCOME",
+    "variable": {
+      "name": "User"
+    },
+    "type": "EMAIL"
   }'
 ```
 
