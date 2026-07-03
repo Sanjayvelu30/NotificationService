@@ -1,92 +1,74 @@
-# Notification Service (V1)
+# Notification Engine Monolith (V2 SaaS)
 
-A production-quality notification service with REST API, worker pool, retry scheduler, DLQ support, and PostgreSQL persistence.
+A highly resilient, production-grade Go notification scheduler and queue service featuring multi-tenant Auth0 isolation, PostgreSQL concurrency primitives, exponential backoff retries, and real-time dashboard analytics.
 
-## Features
+---
 
-- REST API for creating and querying notifications
-- Asynchronous worker pool for delivery
-- Retry scheduler (polls every 1 second)
-- Retry metadata stored on the notification entity
-- Exponential backoff (2^retryCount seconds)
-- DLQ when max retries exceeded
-- Graceful shutdown via context cancellation
-- PostgreSQL persistence with migrations
+## ⚡ Key Technical Features
 
-## Quick start
+### 1. Database Concurrency & Worker Pools
+- **Atomic Queue Acquisition**: Employs PostgreSQL transactional queries with `FOR UPDATE SKIP LOCKED` locking clauses to execute task claiming safely across horizontal worker nodes.
+- **Partial Indexing**: Leverages targeted database indexes (`WHERE status = 'PENDING'`) to limit search ranges, keeping index sizes small and RAM-resident even at millions of logs.
 
-```bash
-docker compose up --build
-```
+### 2. Distributed Resiliency
+- **Exponential Backoff**: Delays retries dynamically ($2^{\text{retry\_count}}$ seconds) on transit delivery faults to protect downstream partner servers.
+- **Dead Letter Queue (DLQ)**: Quarantines persistent failures in an isolated archival table for diagnostic logs audits.
 
-## API
+### 3. Identity & API Security
+- **Auth0 Multitenancy**: Restricts template queries and notification audits securely. Users can only view or manage records owned by their Auth0 sub claims.
+- **JWT Validation Cache**: Uses a local thread-safe `sync.Map` validation cache to save user profile validations, preventing latency penalties.
+- **User-Scoped Rate Limiting**: Scopes Fixed Window rate limiter tokens directly to the authenticated user ID (falling back to client IP).
 
-### Create notification
+### 4. Interactive Console Developer UI
+- Uses Go's native `go:embed` filesystem utility to deliver a self-contained monolith build package.
+- **Quota Progress Gauge**: Renders live rate-limit utilization states dynamically.
+- **Live Terminal Console**: Streams real-time scheduler state log entries directly to the dashboard.
 
-```bash
-curl -X POST http://localhost:8080/api/v1/notifications \
-  -H "Content-Type: application/json" \
-  -d '{
-    "recipient": "user@example.com",
-    "template": "WELCOME",
-    "variable": {
-      "name": "User"
-    },
-    "type": "EMAIL"
-  }'
-```
+---
 
-### Get notification
+## 🚀 Quick Start
 
-```bash
-curl http://localhost:8080/api/v1/notifications/{id}
-```
+1. Create a local `.env` file (copied from `.env.example`) and inject your Resend API Key:
+   ```env
+   RESEND_API_KEY=re_MfLT8nBm_...
+   AUTH0_DOMAIN=dev-i6avz7x124upwug6.us.auth0.com
+   ```
+2. Build and start the container stack:
+   ```bash
+   docker compose up --build
+   ```
+3. Open your browser in an **Incognito Window** (to clear old redirect caches) and visit:
+   👉 **`http://localhost:8080/`**
 
-### Health check
+---
 
-```bash
-curl http://localhost:8080/health
-```
+## 🛠 Project Structure
 
-## Local development
-
-```bash
-# Start PostgreSQL only
-docker compose up postgres -d
-
-# Run migrations and start the app
-export DATABASE_URL="postgres://notification:notification@localhost:5432/notification?sslmode=disable"
-go run ./cmd/server
-```
-
-## Configuration
-
-| Variable       | Default                                                                 | Description          |
-|----------------|-------------------------------------------------------------------------|----------------------|
-| `DATABASE_URL` | `postgres://notification:notification@localhost:5432/notification?sslmode=disable` | PostgreSQL DSN |
-| `HTTP_ADDR`    | `:8080`                                                                 | HTTP listen address  |
-| `WORKER_COUNT` | `5`                                                                     | Worker pool size     |
-
-## Project structure
-
-```
+```text
 cmd/server/           Application entrypoint and DI wiring
 internal/
-  config/             Environment-based configuration
-  database/           Connection pool and migrations
-  domain/             Notification entity
-  handler/            REST handlers
-  repository/         Repository interface + PostgreSQL impl
-  router/             Gin router
-  service/            Business logic, worker pool, scheduler
-migrations/           SQL migrations
+  config/             Configuration schema loading
+  database/           Connection pools and migration triggers
+  domain/             Core entity representations (Notification, Template)
+  handler/            REST controllers (Notification, Template)
+  middleware/         Auth0 verification & cache validation layer
+  ratelimit/          Fixed Window middleware scoped by User ID
+  repository/         Postgres client mapping interfaces
+  router/             Gin router mapping static and protected streams
+  service/            Background concurrency workers & retry scheduler
+migrations/           Postgre SQL migration files (001 to 004)
 ```
 
-## Future improvements
+---
 
-- Redis/Kafka for distributed job queue
-- Real delivery providers (SES, Twilio, FCM) via `Sender` interface
-- Outbox pattern for reliable publish-after-commit
-- Idempotency keys
-- Metrics and distributed tracing
-- Distributed retry scheduler with leader election
+## ⚙️ Configuration Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgres://notification:...@postgres:5432/...` | PostgreSQL connection DSN |
+| `HTTP_ADDR` | `:8080` | Server HTTP binding address |
+| `WORKER_COUNT` | `5` | Number of concurrent poller workers |
+| `RATE_LIMIT_MAX` | `20` | Requests allowed per rate limit window |
+| `RATE_LIMIT_DURATION` | `24h` | Rate limiter window length |
+| `AUTH0_DOMAIN` | `dev-i6avz7x124upwug6.us.auth0.com` | Auth0 domain endpoint |
+| `RESEND_API_KEY` | | Partner API key for email delivery |

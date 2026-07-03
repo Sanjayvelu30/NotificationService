@@ -23,8 +23,10 @@ services:
       DATABASE_URL: postgres://notification:notification@postgres:5432/notification?sslmode=disable
       HTTP_ADDR: ":8080"
       WORKER_COUNT: "5"
-      RATE_LIMIT_MAX: "3"
+      RATE_LIMIT_MAX: "20"
       RATE_LIMIT_DURATION: "24h"
+      RESEND_API_KEY: "${RESEND_API_KEY}"
+      AUTH0_DOMAIN: "dev-i6avz7x124upwug6.us.auth0.com"
     depends_on:
       postgres:
         condition: service_healthy

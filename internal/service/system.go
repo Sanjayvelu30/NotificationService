@@ -1,10 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,7 +23,9 @@ type NotificationSender interface {
 }
 
 type EmailSender struct {
-	FailRate float64
+	TemplateRepo repository.TemplateRepo
+	ResendAPIKey string
+	FailRate     float64
 }
 
 func (e *EmailSender) Send(notification domain.Notification) error {
@@ -27,10 +33,64 @@ func (e *EmailSender) Send(notification domain.Notification) error {
 	if notification.Recipient == "fail@example.com" {
 		return fmt.Errorf("permanent email sending failure for testing")
 	}
-	if e.FailRate > 0 && rand.Float64() < e.FailRate {
-		return fmt.Errorf("transient email delivery failure")
+
+	// Retrieve the template body from the database repository (matching user_id or global fallback)
+	templateBody, err := e.TemplateRepo.Get(notification.Template, notification.UserID)
+	if err != nil {
+		return fmt.Errorf("load template %q: %w", notification.Template, err)
 	}
-	slog.Info("email notification sent successfully", "id", notification.ID)
+
+	// Dynamic placeholder rendering (e.g. {{name}} -> User)
+	body := templateBody
+	for k, v := range notification.Variable {
+		body = strings.ReplaceAll(body, "{{"+k+"}}", v)
+	}
+
+	// If no API Key is provided, fallback to logging the rendered template
+	if e.ResendAPIKey == "" {
+		slog.Warn("RESEND_API_KEY is empty, falling back to mock logger success", "id", notification.ID)
+		if e.FailRate > 0 && rand.Float64() < e.FailRate {
+			return fmt.Errorf("transient email delivery failure (mock)")
+		}
+		slog.Info("mock email notification sent successfully", "id", notification.ID, "body", body)
+		return nil
+	}
+
+	// Construct payload for Resend REST API
+	payload := map[string]any{
+		"from":    "onboarding@resend.dev",
+		"to":      []string{notification.Recipient},
+		"subject": fmt.Sprintf("Notification: %s", notification.Template),
+		"html":    fmt.Sprintf("<p>%s</p>", body),
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal resend payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("create HTTP request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+e.ResendAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("execute HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+		var errMap map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&errMap)
+		return fmt.Errorf("resend API returned error (status %d): %v", resp.StatusCode, errMap)
+	}
+
+	slog.Info("email notification sent successfully via Resend API", "id", notification.ID)
 	return nil
 }
 
@@ -67,6 +127,7 @@ type NotificationSystem struct {
 	Cancel               context.CancelFunc
 	NotificationChannel  chan domain.Notification
 	NotificationRepo     repository.NotificationRepo
+	TemplateRepo         repository.TemplateRepo
 	IdempotencyRepo      repository.IdempotencyRepo
 	Wg                   sync.WaitGroup
 	NotificationStrategy map[domain.NotificationType]NotificationSender
@@ -88,6 +149,7 @@ func (n *NotificationSystem) Process(notification domain.Notification) {
 		slog.Warn("job execution failed", "id", notification.ID, "error", err)
 		// Increase retry Count
 		notification.RetryCount++
+		notification.ErrorMessage = err.Error()
 		if notification.RetryCount > n.MaxRetryCount {
 			notification.Status = domain.DLQ
 			if err := n.NotificationRepo.Update(notification); err != nil {
@@ -98,22 +160,23 @@ func (n *NotificationSystem) Process(notification domain.Notification) {
 			}
 			return
 		}
-		
-		// retry less than limit, schedule next attempt
-		backoff := time.Second * time.Duration(1<<notification.RetryCount)
-		notification.NextRetryAt = time.Now().Add(backoff)
-		notification.Status = domain.Pending // Set back to PENDING so scheduler can pick it up
+
+		// Update next retry time with exponential backoff (2^retry_count seconds)
+		delay := time.Duration(1<<notification.RetryCount) * time.Second
+		notification.NextRetryAt = time.Now().Add(delay)
+		notification.Status = domain.Pending
 
 		if err := n.NotificationRepo.Update(notification); err != nil {
-			slog.Error("failed to update status for retry scheduling", "id", notification.ID, "error", err)
+			slog.Error("failed to update status for retry", "id", notification.ID, "error", err)
 		}
 		return
 	}
 
-	// Succeeded
+	// Success
 	notification.Status = domain.Sent
+	notification.ErrorMessage = ""
 	if err := n.NotificationRepo.Update(notification); err != nil {
-		slog.Error("failed to update status to sent", "id", notification.ID, "error", err)
+		slog.Error("failed to update status to SENT", "id", notification.ID, "error", err)
 	}
 }
 
@@ -157,14 +220,24 @@ func (n *NotificationSystem) Start() {
 	slog.Info("worker pool started", "workers", n.WorkerCount)
 }
 
-func (n *NotificationSystem) CreateNotification(templateName string, variable map[string]string, notificationType domain.NotificationType, recipient string) (domain.Notification, error) {
+func (n *NotificationSystem) CreateNotification(templateName string, variable map[string]string, notificationType domain.NotificationType, recipient string, userID string) (domain.Notification, error) {
 	if n.ShuttingDown.Load() {
 		return domain.Notification{}, fmt.Errorf("notification system is shutting down")
 	}
 
-	// Resolve/check template exists
-	if _, exists := domain.Templates[templateName]; !exists {
-		return domain.Notification{}, fmt.Errorf("invalid template name: %s", templateName)
+	// 1. Enforce system threshold of 100 max notifications
+	totalCount, err := n.NotificationRepo.GetTotalCount()
+	if err != nil {
+		return domain.Notification{}, fmt.Errorf("failed to check system threshold: %w", err)
+	}
+	if totalCount >= 100 {
+		return domain.Notification{}, fmt.Errorf("system threshold exceeded: maximum limit of 100 total notifications reached")
+	}
+
+	// 2. Resolve/check template exists in database
+	_, err = n.TemplateRepo.Get(templateName, userID)
+	if err != nil {
+		return domain.Notification{}, fmt.Errorf("invalid template name: %w", err)
 	}
 
 	id := uuid.NewString()
@@ -178,6 +251,7 @@ func (n *NotificationSystem) CreateNotification(templateName string, variable ma
 		Type:        notificationType,
 		Status:      domain.Pending,
 		NextRetryAt: time.Now(), // Process immediately
+		UserID:      userID,
 	}
 
 	if err := n.NotificationRepo.Save(notification); err != nil {

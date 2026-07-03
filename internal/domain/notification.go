@@ -39,4 +39,6 @@ type Notification struct {
 	Type        NotificationType  `json:"type"`
 	Status      NotificationStatus `json:"status"`
 	NextRetryAt time.Time         `json:"next_retry_at"`
+	UserID      string            `json:"user_id"`
+	ErrorMessage string           `json:"error_message"`
 }

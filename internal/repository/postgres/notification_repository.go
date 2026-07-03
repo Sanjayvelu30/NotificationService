@@ -28,15 +28,20 @@ func (r *NotificationRepository) Save(n domain.Notification) error {
 	query := `
 		INSERT INTO notifications (
 			id, recipient, template, variable, retry_count,
-			created_at, type, status, next_retry_at
+			created_at, type, status, next_retry_at, user_id, error_message
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9
+			$6, $7, $8, $9, $10, $11
 		)`
+
+	userID := n.UserID
+	if userID == "" {
+		userID = "global"
+	}
 
 	_, err = r.pool.Exec(context.Background(), query,
 		n.ID, n.Recipient, n.Template, varBytes, n.RetryCount,
-		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt,
+		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt, userID, n.ErrorMessage,
 	)
 	if err != nil {
 		return fmt.Errorf("save notification: %w", err)
@@ -53,12 +58,12 @@ func (r *NotificationRepository) Update(n domain.Notification) error {
 	query := `
 		UPDATE notifications
 		SET recipient = $2, template = $3, variable = $4, retry_count = $5,
-		    created_at = $6, type = $7, status = $8, next_retry_at = $9
+		    created_at = $6, type = $7, status = $8, next_retry_at = $9, error_message = $10
 		WHERE id = $1`
 
 	_, err = r.pool.Exec(context.Background(), query,
 		n.ID, n.Recipient, n.Template, varBytes, n.RetryCount,
-		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt,
+		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt, n.ErrorMessage,
 	)
 	if err != nil {
 		return fmt.Errorf("update notification: %w", err)
@@ -66,20 +71,20 @@ func (r *NotificationRepository) Update(n domain.Notification) error {
 	return nil
 }
 
-func (r *NotificationRepository) Get(id string) (domain.Notification, error) {
+func (r *NotificationRepository) Get(id string, userID string) (domain.Notification, error) {
 	query := `
 		SELECT id, recipient, template, variable, retry_count,
-		       created_at, type, status, next_retry_at
+		       created_at, type, status, next_retry_at, user_id, error_message
 		FROM notifications
-		WHERE id = $1`
+		WHERE id = $1 AND (user_id = $2 OR user_id = 'global')`
 
 	var n domain.Notification
 	var varBytes []byte
 	var nType, nStatus string
 
-	err := r.pool.QueryRow(context.Background(), query, id).Scan(
+	err := r.pool.QueryRow(context.Background(), query, id, userID).Scan(
 		&n.ID, &n.Recipient, &n.Template, &varBytes, &n.RetryCount,
-		&n.CreatedAt, &nType, &nStatus, &n.NextRetryAt,
+		&n.CreatedAt, &nType, &nStatus, &n.NextRetryAt, &n.UserID, &n.ErrorMessage,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -111,7 +116,7 @@ func (r *NotificationRepository) GetReadyJobs() ([]domain.Notification, error) {
 			LIMIT 50
 			FOR UPDATE SKIP LOCKED
 		)
-		RETURNING id, recipient, template, variable, retry_count, created_at, type, status, next_retry_at`
+		RETURNING id, recipient, template, variable, retry_count, created_at, type, status, next_retry_at, user_id, error_message`
 
 	rows, err := r.pool.Query(context.Background(), query)
 	if err != nil {
@@ -127,7 +132,7 @@ func (r *NotificationRepository) GetReadyJobs() ([]domain.Notification, error) {
 
 		err := rows.Scan(
 			&n.ID, &n.Recipient, &n.Template, &varBytes, &n.RetryCount,
-			&n.CreatedAt, &nType, &nStatus, &n.NextRetryAt,
+			&n.CreatedAt, &nType, &nStatus, &n.NextRetryAt, &n.UserID, &n.ErrorMessage,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan ready job: %w", err)
@@ -150,6 +155,15 @@ func (r *NotificationRepository) GetReadyJobs() ([]domain.Notification, error) {
 	return notifications, nil
 }
 
+func (r *NotificationRepository) GetTotalCount() (int, error) {
+	var count int
+	err := r.pool.QueryRow(context.Background(), "SELECT COUNT(*) FROM notifications").Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("get total notifications count: %w", err)
+	}
+	return count, nil
+}
+
 type DLQRepository struct {
 	pool *pgxpool.Pool
 }
@@ -167,15 +181,20 @@ func (r *DLQRepository) Save(n domain.Notification) error {
 	query := `
 		INSERT INTO dlq_notifications (
 			id, recipient, template, variable, retry_count,
-			created_at, type, status, next_retry_at
+			created_at, type, status, next_retry_at, user_id, error_message
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9
+			$6, $7, $8, $9, $10, $11
 		)`
+
+	userID := n.UserID
+	if userID == "" {
+		userID = "global"
+	}
 
 	_, err = r.pool.Exec(context.Background(), query,
 		n.ID, n.Recipient, n.Template, varBytes, n.RetryCount,
-		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt,
+		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt, userID, n.ErrorMessage,
 	)
 	if err != nil {
 		return fmt.Errorf("save dlq notification: %w", err)
@@ -183,20 +202,20 @@ func (r *DLQRepository) Save(n domain.Notification) error {
 	return nil
 }
 
-func (r *DLQRepository) Get(id string) (domain.Notification, error) {
+func (r *DLQRepository) Get(id string, userID string) (domain.Notification, error) {
 	query := `
 		SELECT id, recipient, template, variable, retry_count,
-		       created_at, type, status, next_retry_at
+		       created_at, type, status, next_retry_at, user_id, error_message
 		FROM dlq_notifications
-		WHERE id = $1`
+		WHERE id = $1 AND (user_id = $2 OR user_id = 'global')`
 
 	var n domain.Notification
 	var varBytes []byte
 	var nType, nStatus string
 
-	err := r.pool.QueryRow(context.Background(), query, id).Scan(
+	err := r.pool.QueryRow(context.Background(), query, id, userID).Scan(
 		&n.ID, &n.Recipient, &n.Template, &varBytes, &n.RetryCount,
-		&n.CreatedAt, &nType, &nStatus, &n.NextRetryAt,
+		&n.CreatedAt, &nType, &nStatus, &n.NextRetryAt, &n.UserID, &n.ErrorMessage,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {

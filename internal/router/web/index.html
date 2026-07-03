@@ -3,15 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notification Hub Dashboard</title>
+    <title>Notification Hub Console</title>
+    <!-- Inline SVG Favicon to avoid 404 errors -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <!-- Modern Premium Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Auth0 SPA SDK -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
     <style>
         :root {
-            --bg-color: #0b0f19;
-            --glass-bg: rgba(17, 25, 40, 0.65);
+            --bg-color: #080c14;
+            --glass-bg: rgba(13, 20, 35, 0.7);
             --glass-border: rgba(255, 255, 255, 0.08);
             --text-primary: #f3f4f6;
             --text-secondary: #9ca3af;
@@ -19,6 +23,7 @@
             --accent-green: #10b981;
             --accent-red: #ef4444;
             --accent-orange: #f59e0b;
+            --glow-color: rgba(59, 130, 246, 0.15);
         }
 
         * {
@@ -31,47 +36,143 @@
             font-family: 'Plus Jakarta Sans', sans-serif;
             background-color: var(--bg-color);
             background-image: 
-                radial-gradient(at 10% 10%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-                radial-gradient(at 90% 90%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
             background-attachment: fixed;
             color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 2rem 1rem;
+            padding: 2rem 1.5rem;
+        }
+
+        /* Loading Screen overlay */
+        #authLoader {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--glass-border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s infinite linear;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         .container {
             width: 100%;
-            max-width: 1000px;
+            max-width: 1200px;
             display: grid;
             grid-template-columns: 1fr;
             gap: 2rem;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .container.loaded {
+            opacity: 1;
         }
 
         header {
-            text-align: center;
-            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 1rem 2rem;
+            border-radius: 20px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
         }
 
         header h1 {
-            font-size: 2.5rem;
+            font-size: 1.75rem;
             font-weight: 700;
-            letter-spacing: -0.05em;
+            letter-spacing: -0.04em;
             background: linear-gradient(to right, #3b82f6, #60a5fa, #10b981);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 0.5rem;
         }
 
-        header p {
-            color: var(--text-secondary);
-            margin-top: 0.5rem;
-            font-size: 1rem;
+        /* User Profile Badge */
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--glass-border);
+            padding: 0.4rem 1rem;
+            border-radius: 9999px;
+            transition: all 0.2s ease;
+        }
+
+        .user-badge img {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 1.5px solid var(--accent-blue);
+        }
+
+        .user-badge span {
+            font-size: 0.85rem;
+            font-weight: 600;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .logout-btn {
+            background: transparent;
+            color: var(--accent-red);
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            transition: opacity 0.2s ease;
+            box-shadow: none;
+        }
+
+        .logout-btn:hover {
+            opacity: 0.8;
+            box-shadow: none;
+        }
+
+        /* Layout Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.6fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 950px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .left-col, .right-col {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
         }
 
         /* Glass Cards */
@@ -80,32 +181,114 @@
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 2rem;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            border-radius: 20px;
+            padding: 1.75rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
         }
 
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1.5fr;
-            gap: 2rem;
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent);
         }
 
-        @media (max-width: 768px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
+        .card:hover {
+            border-color: rgba(59, 130, 246, 0.2);
+            box-shadow: 0 12px 40px var(--glow-color);
         }
 
         h2 {
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             font-weight: 600;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: space-between;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             padding-bottom: 0.75rem;
+            letter-spacing: -0.02em;
+        }
+
+        /* Quota Bar */
+        .quota-container {
+            margin-bottom: 1.25rem;
+        }
+
+        .quota-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .quota-bar-bg {
+            background: rgba(255, 255, 255, 0.05);
+            height: 10px;
+            border-radius: 9999px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .quota-bar-fill {
+            background: linear-gradient(90deg, var(--accent-blue), #60a5fa);
+            height: 100%;
+            width: 0%;
+            border-radius: 9999px;
+            transition: width 0.4s ease;
+        }
+
+        /* Live Terminal Logs */
+        .terminal {
+            background: #04060b;
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            color: #38bdf8;
+            max-height: 250px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+        }
+
+        .terminal-line {
+            display: flex;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        .terminal-time {
+            color: #64748b;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .terminal-type-info {
+            color: #38bdf8;
+        }
+
+        .terminal-type-warn {
+            color: var(--accent-orange);
+        }
+
+        .terminal-type-error {
+            color: var(--accent-red);
+        }
+
+        .terminal-type-success {
+            color: var(--accent-green);
         }
 
         /* Form Controls */
@@ -115,28 +298,33 @@
 
         label {
             display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
+            font-size: 0.85rem;
+            font-weight: 600;
             color: var(--text-secondary);
             margin-bottom: 0.5rem;
         }
 
         input, select, textarea {
             width: 100%;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(0, 0, 0, 0.3);
             border: 1px solid var(--glass-border);
             border-radius: 8px;
             padding: 0.75rem 1rem;
             color: var(--text-primary);
             font-family: inherit;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             transition: all 0.2s ease;
         }
 
         input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
         }
 
         .variable-inputs {
@@ -145,13 +333,8 @@
             border-radius: 8px;
             padding: 1rem;
             margin-top: 0.5rem;
-        }
-
-        .variable-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
         }
 
         /* Action Buttons */
@@ -161,12 +344,12 @@
             color: white;
             border: none;
             border-radius: 8px;
-            padding: 0.875rem;
-            font-size: 1rem;
-            font-weight: 600;
+            padding: 0.85rem;
+            font-size: 0.95rem;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -175,54 +358,38 @@
 
         button:hover {
             transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
         }
 
-        button:active {
-            transform: translateY(0);
+        button.btn-secondary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+            margin-top: 0.5rem;
         }
 
-        /* Metrics & Status Badges */
-        .info-card {
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border: 1px solid var(--glass-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        button.btn-secondary:hover {
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
         }
 
-        .info-card-label {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-
-        .info-card-value {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--accent-blue);
-        }
-
+        /* Status Badges */
         .badge {
             display: inline-flex;
             align-items: center;
             padding: 0.25rem 0.6rem;
             border-radius: 9999px;
             font-size: 0.75rem;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
         }
 
         .badge-pending {
-            background-color: rgba(156, 163, 175, 0.15);
+            background-color: rgba(156, 163, 175, 0.12);
             color: #d1d5db;
         }
 
         .badge-processing {
             background-color: rgba(245, 158, 11, 0.15);
-            color: #fca5a5;
+            color: #fcd34d;
             animation: pulse 1.5s infinite;
         }
 
@@ -242,7 +409,7 @@
             100% { opacity: 0.6; }
         }
 
-        /* History Table */
+        /* Activity Logs Table */
         .table-container {
             overflow-x: auto;
             margin-top: 1rem;
@@ -255,14 +422,17 @@
         }
 
         th, td {
-            padding: 1rem;
+            padding: 0.85rem 1rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 0.875rem;
+            font-size: 0.85rem;
         }
 
         th {
             color: var(--text-secondary);
-            font-weight: 600;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
         }
 
         td {
@@ -270,149 +440,371 @@
         }
 
         tr:hover td {
-            background-color: rgba(255, 255, 255, 0.01);
+            background-color: rgba(255, 255, 255, 0.015);
         }
 
         .empty-state {
             text-align: center;
             color: var(--text-secondary);
-            padding: 2rem;
-            font-size: 0.9rem;
+            padding: 2.5rem;
+            font-size: 0.875rem;
         }
 
-        /* Notifications Alert */
+        /* Alerts */
         .alert {
             padding: 1rem;
             border-radius: 8px;
             margin-bottom: 1.5rem;
             display: none;
-            font-size: 0.9rem;
+            font-size: 0.875rem;
             font-weight: 500;
+            border: 1px solid transparent;
         }
 
         .alert-success {
-            background-color: rgba(16, 185, 129, 0.15);
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background-color: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.2);
             color: #a7f3d0;
         }
 
         .alert-error {
-            background-color: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.3);
+            background-color: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
             color: #fca5a5;
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
+    <!-- Auth Loader Overlay -->
+    <div id="authLoader">
+        <div class="spinner"></div>
+        <p style="margin-top: 1.5rem; color: var(--text-secondary); font-weight: 500;">Securing session with Auth0...</p>
+    </div>
+
+    <div class="container" id="appContainer">
         <header>
-            <h1>⚡ Notification Hub</h1>
-            <p>Monolithic micro-engine running with Fixed Window rate limiting and background queues</p>
+            <h1>⚡ Notification Console</h1>
+            <div class="user-badge" id="userBadge">
+                <!-- Filled by Auth0 SDK -->
+            </div>
         </header>
 
-        <div class="alert alert-success" id="successAlert">Notification dispatched successfully!</div>
-        <div class="alert alert-error" id="errorAlert">Validation error occurred.</div>
+        <div class="alert alert-success" id="successAlert">Operation completed successfully!</div>
+        <div class="alert alert-error" id="errorAlert">An error occurred.</div>
 
         <div class="dashboard-grid">
-            <!-- Left Side: Dispatch Form -->
-            <div class="card">
-                <h2>Send Notification</h2>
-                <form id="dispatchForm">
-                    <div class="form-group">
-                        <label for="recipient">Recipient (Email or Phone)</label>
-                        <input type="text" id="recipient" placeholder="e.g. user@example.com" required>
-                    </div>
+            <!-- Left Column: Forms -->
+            <div class="left-col">
+                <!-- Dispatch Card -->
+                <div class="card">
+                    <h2>Send Dispatch</h2>
+                    <form id="dispatchForm">
+                        <div class="form-group">
+                            <label for="recipient">Recipient Address</label>
+                            <input type="text" id="recipient" placeholder="e.g. user@example.com" required>
+                        </div>
 
-                    <div class="form-group">
-                        <label for="type">Channel Type</label>
-                        <select id="type" required>
-                            <option value="EMAIL">Email</option>
-                            <option value="SMS">SMS</option>
-                            <option value="PUSH">Push Notification</option>
-                        </select>
-                    </div>
+                        <div class="form-group">
+                            <label for="type">Channel Type</label>
+                            <select id="type" required>
+                                <option value="EMAIL">Email (Resend)</option>
+                                <option value="SMS">SMS (Mock)</option>
+                                <option value="PUSH">Push (Mock)</option>
+                            </select>
+                        </div>
 
-                    <div class="form-group">
-                        <label for="template">Template</label>
-                        <select id="template" required>
-                            <option value="WELCOME">WELCOME (Welcome user)</option>
-                            <option value="MFA">MFA (Multi-factor token)</option>
-                            <option value="PASSWORD_RESET">PASSWORD_RESET (Reset link)</option>
-                        </select>
-                    </div>
+                        <div class="form-group">
+                            <label for="template">Template</label>
+                            <select id="template" required>
+                                <!-- Loaded dynamically from DB -->
+                            </select>
+                        </div>
 
-                    <div class="form-group">
-                        <label>Template Variables</label>
-                        <div class="variable-inputs" id="variableFields">
-                            <!-- Populated dynamically based on template selection -->
+                        <div class="form-group">
+                            <label>Template Variables</label>
+                            <div class="variable-inputs" id="variableFields">
+                                Select a template to view variables.
+                            </div>
+                        </div>
+
+                        <button type="submit" id="submitBtn">
+                            Dispatch Event
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Template Customizer -->
+                <div class="card">
+                    <h2>Create Custom Template</h2>
+                    <form id="templateForm">
+                        <div class="form-group">
+                            <label for="templateName">Template ID (UPPERCASE)</label>
+                            <input type="text" id="templateName" placeholder="e.g. BILLING_SUCCESS" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="templateBody">Template Body (use {{placeholder}} tags)</label>
+                            <textarea id="templateBody" placeholder="Hi {{name}}, your receipt for {{amount}} is ready!" required></textarea>
+                        </div>
+
+                        <button type="submit" class="btn-secondary">
+                            Save Template
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column: Quota Limits & Logs Terminal -->
+            <div class="right-col">
+                <!-- Quota Tracker -->
+                <div class="card">
+                    <h2>API Quota Consumption</h2>
+                    
+                    <div class="quota-container">
+                        <div class="quota-header">
+                            <span>User Rate Limit Usage</span>
+                            <span id="quotaText">0 / 20 requests used</span>
+                        </div>
+                        <div class="quota-bar-bg">
+                            <div class="quota-bar-fill" id="quotaBar"></div>
                         </div>
                     </div>
 
-                    <button type="submit" id="submitBtn">
-                        Dispatch Notification
-                    </button>
-                </form>
-            </div>
-
-            <!-- Right Side: Limit Tracking & History -->
-            <div class="card">
-                <h2>Local Environment Controls</h2>
-                
-                <div class="info-card">
-                    <span class="info-card-label">Rate Limiter Limit</span>
-                    <span class="info-card-value">Max 3 requests / 24 hours per IP</span>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+                        Rate limiting resets dynamically in a sliding 24h window. Accounts are locked when threshold is exceeded.
+                    </div>
                 </div>
 
-                <h2>Recent Dispatched Activity</h2>
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Recipient</th>
-                                <th>Type</th>
-                                <th>Template</th>
-                                <th>Retries</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historyTableBody">
-                            <!-- Loaded via memory storage -->
-                        </tbody>
-                    </table>
-                    <div class="empty-state" id="emptyState">No notifications sent in this session yet.</div>
+                <!-- Log Stream Terminal -->
+                <div class="card">
+                    <h2>Live Scheduler Terminal Logs</h2>
+                    <div class="terminal" id="terminalConsole">
+                        <div class="terminal-line">
+                            <span class="terminal-time">[00:00:00]</span>
+                            <span class="terminal-type-info">SYSTEM: Terminal active. Awaiting dispatch events...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity List -->
+                <div class="card">
+                    <h2>Your Dispatched Activity</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Recipient</th>
+                                    <th>Type</th>
+                                    <th>Template</th>
+                                    <th>Retries</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                        <div class="empty-state" id="emptyState">No notifications dispatched in this session yet.</div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const templatesVariables = {
-            "WELCOME": ["name"],
-            "MFA": ["code"],
-            "PASSWORD_RESET": ["link"]
-        };
-
-        const form = document.getElementById("dispatchForm");
+        const dispatchForm = document.getElementById("dispatchForm");
+        const templateForm = document.getElementById("templateForm");
         const templateSelect = document.getElementById("template");
         const variableFieldsDiv = document.getElementById("variableFields");
         const historyTableBody = document.getElementById("historyTableBody");
         const emptyState = document.getElementById("emptyState");
         const successAlert = document.getElementById("successAlert");
         const errorAlert = document.getElementById("errorAlert");
+        const terminalConsole = document.getElementById("terminalConsole");
+        const quotaBar = document.getElementById("quotaBar");
+        const quotaText = document.getElementById("quotaText");
 
-        // Keep track of dispatched items in this tab's memory to poll their status
+        // Auth0 Configuration Settings
+        const auth0Config = {
+            domain: "dev-i6avz7x124upwug6.us.auth0.com",
+            clientId: "4CNEz6pl9DbI40sv2HdSYaiqHe41wAyz",
+            cacheLocation: "localstorage",
+            useRefreshTokens: true
+        };
+
+        let auth0Client = null;
+        let accessToken = "";
+        let databaseTemplates = {};
         let localHistory = [];
+        let quotaCount = 0;
+        const maxQuota = 20;
 
-        // Update variable inputs when template option is changed
+        // Logging helper for streaming console logs
+        function logToTerminal(message, type = "info") {
+            const timeStr = new Date().toLocaleTimeString();
+            const line = document.createElement("div");
+            line.className = "terminal-line";
+
+            const timeSpan = document.createElement("span");
+            timeSpan.className = "terminal-time";
+            timeSpan.textContent = `[${timeStr}]`;
+            line.appendChild(timeSpan);
+
+            const msgSpan = document.createElement("span");
+            msgSpan.className = `terminal-type-${type}`;
+            msgSpan.textContent = message;
+            line.appendChild(msgSpan);
+
+            terminalConsole.appendChild(line);
+            terminalConsole.scrollTop = terminalConsole.scrollHeight;
+        }
+
+        // Update rate limit visual elements
+        function incrementQuota() {
+            quotaCount = Math.min(quotaCount + 1, maxQuota);
+            const percentage = (quotaCount / maxQuota) * 100;
+            quotaBar.style.width = `${percentage}%`;
+            quotaText.textContent = `${quotaCount} / ${maxQuota} requests used`;
+
+            if (quotaCount >= maxQuota) {
+                quotaBar.style.background = "var(--accent-red)";
+                logToTerminal("WARNING: API rate limit threshold hit. Further requests will be rejected (HTTP 429).", "warn");
+            }
+        }
+
+        function extractPlaceholders(text) {
+            const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+            const matches = [];
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                if (!matches.includes(match[1])) {
+                    matches.push(match[1]);
+                }
+            }
+            return matches;
+        }
+
+        // Initialize Auth0 Client
+        async function initAuth() {
+            try {
+                auth0Client = await auth0.createAuth0Client({
+                    domain: auth0Config.domain,
+                    clientId: auth0Config.clientId,
+                    cacheLocation: auth0Config.cacheLocation,
+                    useRefreshTokens: auth0Config.useRefreshTokens,
+                    authorizationParams: {
+                        redirect_uri: window.location.origin + "/dashboard/",
+                        audience: `https://${auth0Config.domain}/userinfo`
+                    }
+                });
+
+                const query = window.location.search;
+                if (query.includes("code=") && query.includes("state=")) {
+                    await auth0Client.handleRedirectCallback();
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+
+                const isAuthenticated = await auth0Client.isAuthenticated();
+
+                if (!isAuthenticated) {
+                    await auth0Client.loginWithRedirect();
+                    return;
+                }
+
+                accessToken = await auth0Client.getTokenSilently();
+                const user = await auth0Client.getUser();
+                
+                renderUserProfile(user);
+                
+                document.getElementById("authLoader").style.opacity = "0";
+                setTimeout(() => {
+                    document.getElementById("authLoader").style.display = "none";
+                    document.getElementById("appContainer").classList.add("loaded");
+                }, 300);
+
+                logToTerminal(`AUTH0: Session secured for user ${user.email}. Authorization Bearer active.`, "success");
+                await fetchTemplates();
+
+            } catch (err) {
+                console.error("Auth0 initialization error:", err);
+                showError("Auth0 configuration error: " + err.message);
+                logToTerminal(`ERROR: Auth0 initialization failed: ${err.message}`, "error");
+            }
+        }
+
+        function renderUserProfile(user) {
+            const userBadge = document.getElementById("userBadge");
+            userBadge.innerHTML = "";
+
+            const img = document.createElement("img");
+            img.src = user.picture || "https://www.gravatar.com/avatar/?d=mp";
+            userBadge.appendChild(img);
+
+            const span = document.createElement("span");
+            span.textContent = user.email || user.name;
+            userBadge.appendChild(span);
+
+            const logoutBtn = document.createElement("button");
+            logoutBtn.className = "logout-btn";
+            logoutBtn.textContent = "Sign Out";
+            logoutBtn.addEventListener("click", () => {
+                auth0Client.logout({
+                    logoutParams: {
+                        returnTo: window.location.origin + "/"
+                    }
+                });
+            });
+            userBadge.appendChild(logoutBtn);
+        }
+
+        // Fetch templates
+        async function fetchTemplates() {
+            try {
+                const response = await fetch("/api/v1/templates", {
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`
+                    }
+                });
+                if (!response.ok) throw new Error("Failed to load templates");
+                
+                databaseTemplates = await response.json();
+                
+                templateSelect.innerHTML = "";
+                Object.keys(databaseTemplates).forEach(name => {
+                    const option = document.createElement("option");
+                    option.value = name;
+                    option.textContent = name;
+                    templateSelect.appendChild(option);
+                });
+
+                updateVariables();
+            } catch (err) {
+                showError("Could not fetch templates: " + err.message);
+                logToTerminal(`ERROR: Could not load templates: ${err.message}`, "error");
+            }
+        }
+
         function updateVariables() {
-            const template = templateSelect.value;
-            const fields = templatesVariables[template] || [];
-            variableFieldsDiv.innerHTML = "";
+            const selectedTemplate = templateSelect.value;
+            const templateBody = databaseTemplates[selectedTemplate];
             
-            fields.forEach(field => {
+            if (!templateBody) {
+                variableFieldsDiv.innerHTML = "Select a template.";
+                return;
+            }
+
+            const placeholders = extractPlaceholders(templateBody);
+            variableFieldsDiv.innerHTML = "";
+
+            if (placeholders.length === 0) {
+                variableFieldsDiv.innerHTML = "No variables required for this template.";
+                return;
+            }
+
+            placeholders.forEach(field => {
                 const label = document.createElement("label");
-                label.textContent = `Variable: ${field}`;
+                label.textContent = `Variable: {{${field}}}`;
                 const input = document.createElement("input");
                 input.type = "text";
                 input.dataset.key = field;
@@ -428,13 +820,52 @@
         }
 
         templateSelect.addEventListener("change", updateVariables);
-        updateVariables(); // Initialize variables inputs
 
-        // Submit form handler
-        form.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            successAlert.style.display = "none";
+        function showSuccess(msg) {
+            successAlert.textContent = msg;
+            successAlert.style.display = "block";
             errorAlert.style.display = "none";
+        }
+
+        function showError(msg) {
+            errorAlert.textContent = msg;
+            errorAlert.style.display = "block";
+            successAlert.style.display = "none";
+        }
+
+        // Create Template Submit
+        templateForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const name = document.getElementById("templateName").value.trim().toUpperCase();
+            const body = document.getElementById("templateBody").value.trim();
+
+            logToTerminal(`EVENT: Creating custom template "${name}"...`, "info");
+            try {
+                const response = await fetch("/api/v1/templates", {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ name, body })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Failed to save template");
+
+                showSuccess(`Template "${name}" saved successfully!`);
+                logToTerminal(`SUCCESS: Template "${name}" added to PostgreSQL.`, "success");
+                templateForm.reset();
+                await fetchTemplates();
+            } catch (err) {
+                showError(err.message);
+                logToTerminal(`ERROR: Save template failed: ${err.message}`, "error");
+            }
+        });
+
+        // Dispatch Submit
+        dispatchForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
 
             const recipient = document.getElementById("recipient").value.trim();
             const type = document.getElementById("type").value;
@@ -447,39 +878,35 @@
                 variable[input.dataset.key] = input.value.trim();
             });
 
+            logToTerminal(`EVENT: Initiating ${type} notification to ${recipient}...`, "info");
             try {
                 const response = await fetch("/api/v1/notifications", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`
                     },
                     body: JSON.stringify({ recipient, type, template, variable })
                 });
 
+                incrementQuota();
+
                 const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Failed to dispatch notification");
 
-                if (!response.ok) {
-                    throw new Error(data.error || "Failed to create notification");
-                }
-
-                // Add to tracker list
                 localHistory.unshift(data);
                 updateHistoryTable();
                 
-                // Show success message
-                successAlert.textContent = `Notification enqueued successfully! ID: ${data.id}`;
-                successAlert.style.display = "block";
-
-                // Poll status every second
+                showSuccess(`Notification dispatched! ID: ${data.id}`);
+                logToTerminal(`SUCCESS: Job accepted by queue. ID: ${data.id}. Status: PENDING`, "success");
                 startPolling(data.id);
-
             } catch (err) {
-                errorAlert.textContent = err.message;
-                errorAlert.style.display = "block";
+                showError(err.message);
+                logToTerminal(`ERROR: Dispatch failed: ${err.message}`, "error");
             }
         });
 
-        // Update local logs table view
+        // Update Logs Table
         function updateHistoryTable() {
             if (localHistory.length === 0) {
                 emptyState.style.display = "block";
@@ -512,29 +939,68 @@
                 badge.className = `badge badge-${item.status.toLowerCase()}`;
                 badge.textContent = item.status;
                 tdStatus.appendChild(badge);
+
+                if (item.error_message) {
+                    const errDiv = document.createElement("div");
+                    errDiv.style.color = "var(--accent-red)";
+                    errDiv.style.fontSize = "0.75rem";
+                    errDiv.style.marginTop = "0.25rem";
+                    errDiv.style.maxWidth = "200px";
+                    errDiv.style.whiteSpace = "normal";
+                    errDiv.style.wordBreak = "break-word";
+                    errDiv.textContent = `⚠️ ${item.error_message}`;
+                    tdStatus.appendChild(errDiv);
+                }
+
                 tr.appendChild(tdStatus);
 
                 historyTableBody.appendChild(tr);
             });
         }
 
-        // Poll API for pending/processing status transitions
+        // Poll API for pending status
         function startPolling(id) {
+            let lastStatus = "PENDING";
+            let lastRetries = 0;
+
             const timer = setInterval(async () => {
                 try {
-                    const response = await fetch(`/api/v1/notifications/${id}`);
+                    const response = await fetch(`/api/v1/notifications/${id}`, {
+                        headers: {
+                            "Authorization": `Bearer ${accessToken}`
+                        }
+                    });
                     if (!response.ok) return;
 
                     const currentItem = await response.json();
                     
-                    // Update matching element in local storage
                     const index = localHistory.findIndex(item => item.id === id);
                     if (index !== -1) {
                         localHistory[index] = currentItem;
                         updateHistoryTable();
 
-                        // Stop polling once the status resolves to SENT or DLQ
-                        if (currentItem.status === "SENT" || currentItem.status === "DLQ") {
+                        // Write logs to terminal upon status changes
+                        if (currentItem.status !== lastStatus) {
+                            logToTerminal(`POLLER: Job ${id} status updated to ${currentItem.status}.`, currentItem.status === "SENT" ? "success" : (currentItem.status === "DLQ" ? "error" : "info"));
+                            lastStatus = currentItem.status;
+                        }
+
+                        if (currentItem.retry_count !== lastRetries) {
+                            logToTerminal(`WARNING: Job ${id} send attempt failed. Retrying... (Attempt ${currentItem.retry_count}/3)`, "warn");
+                            if (currentItem.error_message) {
+                                logToTerminal(`RETRY ERROR: ${currentItem.error_message}`, "warn");
+                            }
+                            lastRetries = currentItem.retry_count;
+                        }
+
+                        if (currentItem.status === "SENT") {
+                            logToTerminal(`SUCCESS: Job ${id} dispatched successfully to recipient.`, "success");
+                            clearInterval(timer);
+                        } else if (currentItem.status === "DLQ") {
+                            logToTerminal(`ERROR: Job ${id} exceeded max retries. Moved to Dead Letter Queue (DLQ).`, "error");
+                            if (currentItem.error_message) {
+                                logToTerminal(`FINAL ERROR LOG: ${currentItem.error_message}`, "error");
+                            }
                             clearInterval(timer);
                         }
                     }
@@ -543,6 +1009,8 @@
                 }
             }, 1000);
         }
+
+        window.addEventListener("DOMContentLoaded", initAuth);
     </script>
 </body>
 </html>

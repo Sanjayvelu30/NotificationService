@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Engine Console</title>
+    <!-- Inline SVG Favicon to avoid 404 errors -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <!-- Modern Premium Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #080c14;
+            --glass-bg: rgba(13, 20, 35, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-orange: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2.5rem 1.5rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            text-align: center;
+        }
+
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px;
+            padding: 3.5rem 2.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            position: relative;
+        }
+
+        .logo {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+            100% { transform: translateY(0px); }
+        }
+
+        h1 {
+            font-size: 2.75rem;
+            font-weight: 700;
+            letter-spacing: -0.05em;
+            background: linear-gradient(to right, #3b82f6, #60a5fa, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.75rem;
+        }
+
+        p.tagline {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto 3rem auto;
+            line-height: 1.6;
+        }
+
+        /* Features Grid (Expanded to 2x4) */
+        .features-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            text-align: left;
+            margin-bottom: 3.5rem;
+        }
+
+        @media (max-width: 750px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            border-radius: 18px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(59, 130, 246, 0.3);
+            background: rgba(255, 255, 255, 0.04);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.1);
+        }
+
+        .feature-title {
+            font-weight: 700;
+            font-size: 1.05rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .feature-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
+
+        /* CTA Button */
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 1rem 2.75rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .cta-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .cta-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="card">
+            <div class="logo">⚡</div>
+            <h1>Notification Engine Monolith</h1>
+            <p class="tagline">An enterprise-grade Go notification scheduler demonstrating advanced transactional database locking, fault-tolerant worker pools, and secure multi-tenant isolation.</p>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-title">🚀 SKIP LOCKED Concurrency</div>
+                    <div class="feature-desc">Utilizes PostgreSQL `SKIP LOCKED` transactional locking queries to safely scale poller worker threads without double-delivery risks.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🔄 Exponential Backoff</div>
+                    <div class="feature-desc">Scales delivery retries automatically with configurable wait timings ($2^{\text{retry\_count}}$ sec) to protect API resources from flood traffic.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🔒 Auth0 Identity Security</div>
+                    <div class="feature-desc">Protects downstream API endpoints using secure Auth0 user credentials and token validation caches built in-memory.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">⚡ User-Scoped Rate Limiter</div>
+                    <div class="feature-desc">Shields resources from account abuse using custom fixed-window rate limiting scoped directly to your validated user ID.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">📁 Customizable Templates</div>
+                    <div class="feature-desc">Saves template modifications directly to PostgreSQL, isolated securely per tenant using composite primary key indexing constraints.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">📩 Resend Email Integration</div>
+                    <div class="feature-desc">Wired directly to the Resend SMTP API to dispatch production-grade emails with template variable parsing.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🛠 Dead Letter Queue (DLQ)</div>
+                    <div class="feature-desc">Quarantines failed deliveries after max retry exhaustion, recording execution diagnostics for developer inspection.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">📊 Live Dashboard Console</div>
+                    <div class="feature-desc">Streams live background engine logs and dynamic API quota gauges straight to your browser developer console dashboard.</div>
+                </div>
+            </div>
+
+            <a href="/dashboard/" class="cta-btn">
+                Enter Console Dashboard
+            </a>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -16,6 +16,44 @@ type mockNotificationRepo struct {
 	updateCalled int
 }
 
+func (m *mockNotificationRepo) GetTotalCount() (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.data), nil
+}
+
+type mockTemplateRepo struct {
+	mu   sync.Mutex
+	data map[string]string
+}
+
+func (m *mockTemplateRepo) Save(name string, body string, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.data[name] = body
+	return nil
+}
+
+func (m *mockTemplateRepo) Get(name string, userID string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	body, exists := m.data[name]
+	if !exists {
+		return "", errors.New("template not found")
+	}
+	return body, nil
+}
+
+func (m *mockTemplateRepo) GetAll(userID string) (map[string]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	res := make(map[string]string)
+	for k, v := range m.data {
+		res[k] = v
+	}
+	return res, nil
+}
+
 func (m *mockNotificationRepo) Save(n domain.Notification) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -32,7 +70,7 @@ func (m *mockNotificationRepo) Update(n domain.Notification) error {
 	return nil
 }
 
-func (m *mockNotificationRepo) Get(id string) (domain.Notification, error) {
+func (m *mockNotificationRepo) Get(id string, userID string) (domain.Notification, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	n, exists := m.data[id]
@@ -66,7 +104,7 @@ func (m *mockDLQRepo) Save(n domain.Notification) error {
 	return nil
 }
 
-func (m *mockDLQRepo) Get(id string) (domain.Notification, error) {
+func (m *mockDLQRepo) Get(id string, userID string) (domain.Notification, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	n, exists := m.data[id]
@@ -88,10 +126,12 @@ func TestProcess_Success(t *testing.T) {
 	repo := &mockNotificationRepo{data: make(map[string]domain.Notification)}
 	dlq := &mockDLQRepo{data: make(map[string]domain.Notification)}
 	sender := &mockSender{err: nil}
+	tmplRepo := &mockTemplateRepo{data: map[string]string{"WELCOME": "Welcome to our service, {{name}}!"}}
 
 	sys := &NotificationSystem{
-		MaxRetryCount: 3,
+		MaxRetryCount:    3,
 		NotificationRepo: repo,
+		TemplateRepo:     tmplRepo,
 		DLQRepo:          dlq,
 		NotificationStrategy: map[domain.NotificationType]NotificationSender{
 			domain.Email: sender,
@@ -108,7 +148,7 @@ func TestProcess_Success(t *testing.T) {
 
 	sys.Process(n)
 
-	saved, err := repo.Get("test-id-1")
+	saved, err := repo.Get("test-id-1", "")
 	if err != nil {
 		t.Fatalf("expected saved notification, got error: %v", err)
 	}
@@ -122,10 +162,12 @@ func TestProcess_RetryAndDLQ(t *testing.T) {
 	repo := &mockNotificationRepo{data: make(map[string]domain.Notification)}
 	dlq := &mockDLQRepo{data: make(map[string]domain.Notification)}
 	sender := &mockSender{err: errors.New("delivery failed")}
+	tmplRepo := &mockTemplateRepo{data: map[string]string{"WELCOME": "Welcome to our service, {{name}}!"}}
 
 	sys := &NotificationSystem{
-		MaxRetryCount: 3,
+		MaxRetryCount:    3,
 		NotificationRepo: repo,
+		TemplateRepo:     tmplRepo,
 		DLQRepo:          dlq,
 		NotificationStrategy: map[domain.NotificationType]NotificationSender{
 			domain.Email: sender,
@@ -144,7 +186,7 @@ func TestProcess_RetryAndDLQ(t *testing.T) {
 	// First failure - should increment RetryCount and set status back to Pending
 	sys.Process(n)
 
-	saved, err := repo.Get("test-id-2")
+	saved, err := repo.Get("test-id-2", "")
 	if err != nil {
 		t.Fatalf("expected saved notification, got error: %v", err)
 	}
@@ -163,7 +205,7 @@ func TestProcess_RetryAndDLQ(t *testing.T) {
 	saved.RetryCount = 3
 	sys.Process(saved)
 
-	savedAfterDLQ, err := repo.Get("test-id-2")
+	savedAfterDLQ, err := repo.Get("test-id-2", "")
 	if err != nil {
 		t.Fatalf("expected saved notification, got error: %v", err)
 	}
@@ -173,7 +215,7 @@ func TestProcess_RetryAndDLQ(t *testing.T) {
 	}
 
 	// Ensure it is in the DLQ repo
-	dlqItem, err := dlq.Get("test-id-2")
+	dlqItem, err := dlq.Get("test-id-2", "")
 	if err != nil {
 		t.Fatalf("expected item in DLQ repository, got: %v", err)
 	}

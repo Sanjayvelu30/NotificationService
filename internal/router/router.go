@@ -12,7 +12,12 @@ import (
 //go:embed web/*
 var webFS embed.FS
 
-func New(notificationHandler *handler.NotificationHandler, rateLimitMiddleware gin.HandlerFunc) *gin.Engine {
+func New(
+	notificationHandler *handler.NotificationHandler,
+	templateHandler *handler.TemplateHandler,
+	rateLimitMiddleware gin.HandlerFunc,
+	authMiddleware gin.HandlerFunc,
+) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 
@@ -21,7 +26,12 @@ func New(notificationHandler *handler.NotificationHandler, rateLimitMiddleware g
 	if err == nil {
 		r.StaticFS("/dashboard", http.FS(subFS))
 		r.GET("/", func(c *gin.Context) {
-			c.Redirect(http.StatusMovedPermanently, "/dashboard/")
+			landingBytes, readErr := fs.ReadFile(subFS, "landing.html")
+			if readErr != nil {
+				c.String(http.StatusInternalServerError, "Internal Server Error loading landing page")
+				return
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", landingBytes)
 		})
 	}
 
@@ -30,10 +40,13 @@ func New(notificationHandler *handler.NotificationHandler, rateLimitMiddleware g
 	})
 
 	v1 := r.Group("/api/v1")
-	v1.Use(rateLimitMiddleware)
+	v1.Use(authMiddleware, rateLimitMiddleware)
 	{
 		v1.POST("/notifications", notificationHandler.Create)
 		v1.GET("/notifications/:id", notificationHandler.GetByID)
+
+		v1.POST("/templates", templateHandler.Save)
+		v1.GET("/templates", templateHandler.GetAll)
 	}
 
 	return r

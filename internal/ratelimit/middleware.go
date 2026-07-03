@@ -9,9 +9,15 @@ import (
 // RateLimitMiddleware returns a Gin HandlerFunc that restricts requests using the given RateLimitSystem.
 func RateLimitMiddleware(system *RateLimitSystem) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ip := c.ClientIP()
+		userID, exists := c.Get("user_id")
+		var key string
+		if !exists {
+			key = c.ClientIP()
+		} else {
+			key = userID.(string)
+		}
 
-		if err := system.Allow(ip); err != nil {
+		if err := system.Allow(key); err != nil {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error": err.Error(),
 			})

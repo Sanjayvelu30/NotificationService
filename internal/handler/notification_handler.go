@@ -26,15 +26,16 @@ type createNotificationRequest struct {
 }
 
 type notificationResponse struct {
-	ID          string            `json:"id"`
-	Recipient   string            `json:"recipient"`
-	Template    string            `json:"template"`
-	Variable    map[string]string `json:"variable"`
-	RetryCount  int               `json:"retry_count"`
-	CreatedAt   string            `json:"created_at"`
-	Type        string            `json:"type"`
-	Status      string            `json:"status"`
-	NextRetryAt string            `json:"next_retry_at"`
+	ID           string            `json:"id"`
+	Recipient    string            `json:"recipient"`
+	Template     string            `json:"template"`
+	Variable     map[string]string `json:"variable"`
+	RetryCount   int               `json:"retry_count"`
+	CreatedAt    string            `json:"created_at"`
+	Type         string            `json:"type"`
+	Status       string            `json:"status"`
+	NextRetryAt  string            `json:"next_retry_at"`
+	ErrorMessage string            `json:"error_message"`
 }
 
 func (h *NotificationHandler) Create(c *gin.Context) {
@@ -50,11 +51,15 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id")
+	userIDStr, _ := userID.(string)
+
 	notification, err := h.system.CreateNotification(
 		strings.TrimSpace(req.Template),
 		req.Variable,
 		nType,
 		strings.TrimSpace(req.Recipient),
+		userIDStr,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -66,13 +71,15 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 
 func (h *NotificationHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("user_id")
+	userIDStr, _ := userID.(string)
 	
 	// Check the standard repository
-	notification, err := h.system.NotificationRepo.Get(id)
+	notification, err := h.system.NotificationRepo.Get(id, userIDStr)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			// Fallback check the DLQ Repository
-			dlqNotification, errDlq := h.system.DLQRepo.Get(id)
+			dlqNotification, errDlq := h.system.DLQRepo.Get(id, userIDStr)
 			if errDlq == nil {
 				c.JSON(http.StatusOK, toResponse(dlqNotification))
 				return
@@ -89,14 +96,15 @@ func (h *NotificationHandler) GetByID(c *gin.Context) {
 
 func toResponse(n domain.Notification) notificationResponse {
 	return notificationResponse{
-		ID:          n.ID,
-		Recipient:   n.Recipient,
-		Template:    n.Template,
-		Variable:    n.Variable,
-		RetryCount:  n.RetryCount,
-		CreatedAt:   n.CreatedAt.UTC().Format(time.RFC3339),
-		Type:        string(n.Type),
-		Status:      string(n.Status),
-		NextRetryAt: n.NextRetryAt.UTC().Format(time.RFC3339),
+		ID:           n.ID,
+		Recipient:    n.Recipient,
+		Template:     n.Template,
+		Variable:     n.Variable,
+		RetryCount:   n.RetryCount,
+		CreatedAt:    n.CreatedAt.UTC().Format(time.RFC3339),
+		Type:         string(n.Type),
+		Status:       string(n.Status),
+		NextRetryAt:  n.NextRetryAt.UTC().Format(time.RFC3339),
+		ErrorMessage: n.ErrorMessage,
 	}
 }

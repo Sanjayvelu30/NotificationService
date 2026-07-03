@@ -14,6 +14,7 @@ import (
 	"github.com/sanjay/NotificationService/internal/database"
 	"github.com/sanjay/NotificationService/internal/domain"
 	"github.com/sanjay/NotificationService/internal/handler"
+	"github.com/sanjay/NotificationService/internal/middleware"
 	"github.com/sanjay/NotificationService/internal/ratelimit"
 	"github.com/sanjay/NotificationService/internal/repository/postgres"
 	"github.com/sanjay/NotificationService/internal/router"
@@ -48,6 +49,7 @@ func main() {
 	repo := postgres.NewNotificationRepository(pool)
 	dlqRepo := postgres.NewDLQRepository(pool)
 	idempotencyRepo := postgres.NewInMemoryIdempotencyRepository()
+	templateRepo := postgres.NewTemplateRepository(pool)
 
 	// Initialize the Fixed Window Rate Limiter
 	rlConfig := ratelimit.RateLimitConfig{
@@ -58,6 +60,10 @@ func main() {
 	rlSystem := ratelimit.NewRateLimitSystem(rlRepo)
 	rlMiddleware := ratelimit.RateLimitMiddleware(rlSystem)
 
+	// Initialize Auth0 authentication middleware
+	auth0Middleware := middleware.NewAuth0Middleware(cfg.Auth0Domain)
+	authMiddleware := auth0Middleware.Handler()
+
 	system := &service.NotificationSystem{
 		WorkerCount:         cfg.WorkerCount,
 		MaxRetryCount:       3,
@@ -65,10 +71,15 @@ func main() {
 		Cancel:              stop,
 		NotificationChannel: make(chan domain.Notification, 256),
 		NotificationRepo:    repo,
+		TemplateRepo:        templateRepo,
 		IdempotencyRepo:     idempotencyRepo,
 		DLQRepo:             dlqRepo,
 		NotificationStrategy: map[domain.NotificationType]service.NotificationSender{
-			domain.Email: &service.EmailSender{FailRate: 0.3},
+			domain.Email: &service.EmailSender{
+				TemplateRepo: templateRepo,
+				ResendAPIKey: os.Getenv("RESEND_API_KEY"),
+				FailRate:     0.3,
+			},
 			domain.Sms:   &service.SmsSender{FailRate: 0.3},
 			domain.Push:  &service.PushSender{FailRate: 0.3},
 		},
@@ -79,7 +90,8 @@ func main() {
 	go system.RetryScheduler()
 
 	notificationHandler := handler.NewNotificationHandler(system)
-	engine := router.New(notificationHandler, rlMiddleware)
+	templateHandler := handler.NewTemplateHandler(templateRepo)
+	engine := router.New(notificationHandler, templateHandler, rlMiddleware, authMiddleware)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
