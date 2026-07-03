@@ -1051,9 +1051,11 @@
                         }
 
                         if (currentItem.retry_count !== lastRetries) {
-                            logToTerminal(`WARNING: Job ${id} send attempt failed. Retrying... (Attempt ${currentItem.retry_count}/3)`, "warn");
-                            if (currentItem.error_message) {
-                                logToTerminal(`RETRY ERROR: ${currentItem.error_message}`, "warn");
+                            if (currentItem.status !== "DLQ" && currentItem.status !== "SENT") {
+                                logToTerminal(`WARNING: Job ${id} send attempt failed. Retrying... (Attempt ${currentItem.retry_count}/3)`, "warn");
+                                if (currentItem.error_message) {
+                                    logToTerminal(`RETRY ERROR: ${currentItem.error_message}`, "warn");
+                                }
                             }
                             lastRetries = currentItem.retry_count;
                         }
