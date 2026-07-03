@@ -24,6 +24,7 @@ func (r *NotificationRepository) Save(n domain.Notification) error {
 	if err != nil {
 		return fmt.Errorf("marshal variables: %w", err)
 	}
+	varString := string(varBytes)
 
 	query := `
 		INSERT INTO notifications (
@@ -40,7 +41,7 @@ func (r *NotificationRepository) Save(n domain.Notification) error {
 	}
 
 	_, err = r.pool.Exec(context.Background(), query,
-		n.ID, n.Recipient, n.Template, varBytes, n.RetryCount,
+		n.ID, n.Recipient, n.Template, varString, n.RetryCount,
 		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt, userID, n.ErrorMessage,
 	)
 	if err != nil {
@@ -54,6 +55,7 @@ func (r *NotificationRepository) Update(n domain.Notification) error {
 	if err != nil {
 		return fmt.Errorf("marshal variables: %w", err)
 	}
+	varString := string(varBytes)
 
 	query := `
 		UPDATE notifications
@@ -62,7 +64,7 @@ func (r *NotificationRepository) Update(n domain.Notification) error {
 		WHERE id = $1`
 
 	_, err = r.pool.Exec(context.Background(), query,
-		n.ID, n.Recipient, n.Template, varBytes, n.RetryCount,
+		n.ID, n.Recipient, n.Template, varString, n.RetryCount,
 		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt, n.ErrorMessage,
 	)
 	if err != nil {
@@ -177,6 +179,7 @@ func (r *DLQRepository) Save(n domain.Notification) error {
 	if err != nil {
 		return fmt.Errorf("marshal variables: %w", err)
 	}
+	varString := string(varBytes)
 
 	query := `
 		INSERT INTO dlq_notifications (
@@ -193,7 +196,7 @@ func (r *DLQRepository) Save(n domain.Notification) error {
 	}
 
 	_, err = r.pool.Exec(context.Background(), query,
-		n.ID, n.Recipient, n.Template, varBytes, n.RetryCount,
+		n.ID, n.Recipient, n.Template, varString, n.RetryCount,
 		n.CreatedAt, string(n.Type), string(n.Status), n.NextRetryAt, userID, n.ErrorMessage,
 	)
 	if err != nil {
