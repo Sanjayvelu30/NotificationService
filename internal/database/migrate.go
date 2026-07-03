@@ -49,5 +49,10 @@ func migrateDatabaseURL(databaseURL string) (string, error) {
 		return "", fmt.Errorf("unsupported database URL scheme %q for migrations", u.Scheme)
 	}
 
+	// Force statement_cache_mode=describe to prevent PgBouncer prepared statement conflicts
+	q := u.Query()
+	q.Set("statement_cache_mode", "describe")
+	u.RawQuery = q.Encode()
+
 	return u.String(), nil
 }
