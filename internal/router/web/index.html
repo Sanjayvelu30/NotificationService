@@ -843,14 +843,29 @@
             const placeholders = extractPlaceholders(templateBody);
             variableFieldsDiv.innerHTML = "";
 
+            // Render Template Preview Box
+            const previewBox = document.createElement("div");
+            previewBox.style.fontSize = "0.8rem";
+            previewBox.style.background = "rgba(255, 255, 255, 0.03)";
+            previewBox.style.padding = "0.75rem 1rem";
+            previewBox.style.borderRadius = "8px";
+            previewBox.style.marginBottom = "1.25rem";
+            previewBox.style.border = "1px solid var(--glass-border)";
+            previewBox.style.lineHeight = "1.4";
+            previewBox.style.color = "var(--text-secondary)";
+            previewBox.innerHTML = `<strong style="color: var(--accent-blue); display: block; margin-bottom: 0.25rem;">Template Preview:</strong> "${templateBody}"`;
+            variableFieldsDiv.appendChild(previewBox);
+
             if (placeholders.length === 0) {
-                variableFieldsDiv.innerHTML = "No variables required for this template.";
+                const info = document.createElement("div");
+                info.textContent = "No variables required for this template.";
+                variableFieldsDiv.appendChild(info);
                 return;
             }
 
             placeholders.forEach(field => {
                 const label = document.createElement("label");
-                label.textContent = `Variable: {{${field}}}`;
+                label.textContent = `Variable Value: {{${field}}}`;
                 const input = document.createElement("input");
                 input.type = "text";
                 input.dataset.key = field;
@@ -859,6 +874,7 @@
                 
                 const wrapper = document.createElement("div");
                 wrapper.className = "form-group";
+                wrapper.style.marginBottom = "0.75rem";
                 wrapper.appendChild(label);
                 wrapper.appendChild(input);
                 variableFieldsDiv.appendChild(wrapper);
