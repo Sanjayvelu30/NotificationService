@@ -40,13 +40,19 @@ func New(
 	})
 
 	v1 := r.Group("/api/v1")
-	v1.Use(authMiddleware, rateLimitMiddleware)
+	v1.Use(authMiddleware)
 	{
-		v1.POST("/notifications", notificationHandler.Create)
+		// Non-rate-limited GET endpoints (allows free polling and dashboard loading)
 		v1.GET("/notifications/:id", notificationHandler.GetByID)
-
-		v1.POST("/templates", templateHandler.Save)
 		v1.GET("/templates", templateHandler.GetAll)
+
+		// Rate-limited mutation endpoints
+		mutations := v1.Group("")
+		mutations.Use(rateLimitMiddleware)
+		{
+			mutations.POST("/notifications", notificationHandler.Create)
+			mutations.POST("/templates", templateHandler.Save)
+		}
 	}
 
 	return r
