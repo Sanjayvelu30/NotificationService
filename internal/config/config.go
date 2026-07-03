@@ -16,6 +16,7 @@ type Config struct {
 	RateLimitMax      int
 	RateLimitDuration time.Duration
 	Auth0Domain       string
+	EmailFrom         string
 }
 
 func Load() (Config, error) {
@@ -41,6 +42,7 @@ func Load() (Config, error) {
 		RateLimitMax:      rlMax,
 		RateLimitDuration: rlDuration,
 		Auth0Domain:       getEnv("AUTH0_DOMAIN", "dev-i6avz7x124upwug6.us.auth0.com"),
+		EmailFrom:         getEnv("EMAIL_FROM", "no-reply@sanjayvelu.online"),
 	}, nil
 }
 

@@ -766,7 +766,10 @@
                         "Authorization": `Bearer ${accessToken}`
                     }
                 });
-                if (!response.ok) throw new Error("Failed to load templates");
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `Server returned status ${response.status}`);
+                }
                 
                 databaseTemplates = await response.json();
                 

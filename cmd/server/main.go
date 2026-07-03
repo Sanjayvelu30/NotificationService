@@ -78,6 +78,7 @@ func main() {
 			domain.Email: &service.EmailSender{
 				TemplateRepo: templateRepo,
 				ResendAPIKey: os.Getenv("RESEND_API_KEY"),
+				EmailFrom:    cfg.EmailFrom,
 				FailRate:     0.3,
 			},
 			domain.Sms:   &service.SmsSender{FailRate: 0.3},

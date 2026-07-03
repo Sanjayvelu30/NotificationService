@@ -25,6 +25,7 @@ type NotificationSender interface {
 type EmailSender struct {
 	TemplateRepo repository.TemplateRepo
 	ResendAPIKey string
+	EmailFrom    string
 	FailRate     float64
 }
 
@@ -57,8 +58,13 @@ func (e *EmailSender) Send(notification domain.Notification) error {
 	}
 
 	// Construct payload for Resend REST API
+	fromAddress := e.EmailFrom
+	if fromAddress == "" {
+		fromAddress = "no-reply@sanjayvelu.online"
+	}
+
 	payload := map[string]any{
-		"from":    "onboarding@resend.dev",
+		"from":    fromAddress,
 		"to":      []string{notification.Recipient},
 		"subject": fmt.Sprintf("Notification: %s", notification.Template),
 		"html":    fmt.Sprintf("<p>%s</p>", body),
