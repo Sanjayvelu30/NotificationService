@@ -46,7 +46,12 @@ func New(
 		v1.GET("/notifications/:id", notificationHandler.GetByID)
 		v1.GET("/templates", templateHandler.GetAll)
 
-		// Rate-limited mutation endpoints
+		// CRITICAL SYSTEM DESIGN DECISION:
+		// We separate read (GET) queries from write (POST) mutations.
+		// Since dashboard clients poll status endpoints at high frequencies (e.g. 1Hz),
+		// applying rate limits universally would exhaust a user's API quota on normal UI updates.
+		// Isolating rate limits to POST endpoints protects external email/SMS provider budgets from
+		// spam while maintaining continuous, uninterrupted UI diagnostics.
 		mutations := v1.Group("")
 		mutations.Use(rateLimitMiddleware)
 		{
