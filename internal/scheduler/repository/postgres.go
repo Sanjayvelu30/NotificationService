@@ -51,12 +51,14 @@ func (r *postgresRepo) Get(id string) (*domain.Task, error) {
 	key := r.cacheKey(id)
 
 	// 1. Try to get from Redis cache
-	val, err := r.rdb.Get(ctx, key).Result()
-	if err == nil {
-		var task domain.Task
-		if err := json.Unmarshal([]byte(val), &task); err == nil {
-			log.Printf("[Repository] Cache HIT: task ID %s retrieved from Redis", id)
-			return &task, nil
+	if r.rdb != nil {
+		val, err := r.rdb.Get(ctx, key).Result()
+		if err == nil {
+			var task domain.Task
+			if err := json.Unmarshal([]byte(val), &task); err == nil {
+				log.Printf("[Repository] Cache HIT: task ID %s retrieved from Redis", id)
+				return &task, nil
+			}
 		}
 	}
 
@@ -66,7 +68,7 @@ func (r *postgresRepo) Get(id string) (*domain.Task, error) {
 	var t domain.Task
 	query := `SELECT id, title, description, callback_url, payload, status, retry_count, max_retries, execute_at, created_at 
 	          FROM tasks WHERE id = $1`
-	err = r.db.QueryRow(query, id).Scan(
+	err := r.db.QueryRow(query, id).Scan(
 		&t.ID,
 		&t.Title,
 		&t.Description,
@@ -90,12 +92,14 @@ func (r *postgresRepo) Get(id string) (*domain.Task, error) {
 	log.Printf("[Repository] Database HIT: task ID %s retrieved from PostgreSQL", id)
 
 	// 3. Write back to Redis cache
-	data, err := json.Marshal(t)
-	if err == nil {
-		if err := r.rdb.Set(ctx, key, data, r.cacheTTL).Err(); err != nil {
-			log.Printf("[Repository] Cache write failed for task ID %s: %v", id, err)
-		} else {
-			log.Printf("[Repository] Cache write success for task ID %s", id)
+	if r.rdb != nil {
+		data, err := json.Marshal(t)
+		if err == nil {
+			if err := r.rdb.Set(ctx, key, data, r.cacheTTL).Err(); err != nil {
+				log.Printf("[Repository] Cache write failed for task ID %s: %v", id, err)
+			} else {
+				log.Printf("[Repository] Cache write success for task ID %s", id)
+			}
 		}
 	}
 
@@ -152,8 +156,10 @@ func (r *postgresRepo) Update(id string, updateFn func(t *domain.Task)) (*domain
 	}
 
 	// 5. Invalidate Redis cache
-	key := r.cacheKey(id)
-	_ = r.rdb.Del(ctx, key).Err()
+	if r.rdb != nil {
+		key := r.cacheKey(id)
+		_ = r.rdb.Del(ctx, key).Err()
+	}
 
 	return &t, nil
 }
