@@ -47,20 +47,26 @@ func main() {
 		fmt.Println("Connected to PostgreSQL successfully.")
 	}
 
-	// 3. Connect to Redis
-	redisAddr := fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort)
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: cfg.RedisPassword,
-		DB:       0,
-	})
-	defer rdb.Close()
+	// 3. Connect to Redis conditionally (skips if config host is local or unreachable)
+	var rdb *redis.Client
+	if cfg.RedisHost != "" && cfg.RedisHost != "localhost" && cfg.RedisHost != "127.0.0.1" {
+		redisAddr := fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort)
+		rdb = redis.NewClient(&redis.Options{
+			Addr:     redisAddr,
+			Password: cfg.RedisPassword,
+			DB:       0,
+		})
+		defer rdb.Close()
 
-	// Verify Redis connection
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Printf("Warning: Redis ping failed (verify Redis is running): %v", err)
+		// Verify Redis connection
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			log.Printf("Warning: Redis ping failed (running in DB-only mode): %v", err)
+			rdb = nil
+		} else {
+			fmt.Println("Connected to Redis successfully.")
+		}
 	} else {
-		fmt.Println("Connected to Redis successfully.")
+		log.Println("Redis host is local or empty; running in Database-only mode without cache.")
 	}
 
 	// 4. Recreate/Initialize tasks schema
