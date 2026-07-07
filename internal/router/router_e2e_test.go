@@ -176,6 +176,13 @@ func TestE2E_NotificationServiceLifecycle(t *testing.T) {
 	// Seed a global template default
 	_ = templateRepo.Save("WELCOME", "Welcome {{name}}!", "global")
 
+	// Set up a mock HTTP server to represent the Task Scheduler microservice
+	mockSchedulerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"status":"created"}`))
+	}))
+	defer mockSchedulerServer.Close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -189,6 +196,8 @@ func TestE2E_NotificationServiceLifecycle(t *testing.T) {
 		TemplateRepo:        templateRepo,
 		IdempotencyRepo:     idempotencyRepo,
 		DLQRepo:             dlqRepo,
+		SchedulerURL:        mockSchedulerServer.URL,
+		SchedulerAPIKey:     "test_api_key_12345",
 		NotificationStrategy: map[domain.NotificationType]service.NotificationSender{
 			domain.Email: &mockEmailSender{},
 		},
@@ -319,6 +328,72 @@ func TestE2E_NotificationServiceLifecycle(t *testing.T) {
 		status, _ := resp["status"].(string)
 		if status == "" {
 			t.Errorf("expected status to be populated, got: %s", status)
+		}
+	})
+
+	// ==========================================
+	// STEP E: SCHEDULE AND CALLBACK WEBHOOK DISPATCH
+	// ==========================================
+	t.Run("Schedule and Callback Webhook", func(t *testing.T) {
+		// Mock Scheduler credentials
+		system.SchedulerAPIKey = "test_api_key_12345"
+
+		// 1. Create a Scheduled notification (1 hour in the future)
+		executeTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+		reqBody := map[string]any{
+			"recipient": "user@example.com",
+			"type":      "EMAIL",
+			"template":  "WELCOME",
+			"variable": map[string]string{
+				"name": "Jane",
+			},
+			"execute_at": executeTime,
+		}
+		jsonBytes, _ := json.Marshal(reqBody)
+
+		req, _ := http.NewRequest("POST", "/api/v1/notifications", bytes.NewBuffer(jsonBytes))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusAccepted {
+			t.Fatalf("expected status 202, got %d. Body: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]any
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+
+		id := resp["id"].(string)
+		status := resp["status"].(string)
+		if status != "SCHEDULED" {
+			t.Errorf("expected status SCHEDULED, got %s", status)
+		}
+
+		// 2. Perform Webhook Callback (trigger immediate dispatch)
+		callbackReq, _ := http.NewRequest("POST", fmt.Sprintf("/api/v1/internal/notifications/%s/dispatch", id), nil)
+		callbackReq.Header.Set("Authorization", "Bearer "+system.SchedulerAPIKey)
+		wCallback := httptest.NewRecorder()
+
+		r.ServeHTTP(wCallback, callbackReq)
+
+		if wCallback.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d. Body: %s", wCallback.Code, wCallback.Body.String())
+		}
+
+		// 3. Query state to check if it transitioned to PENDING
+		queryReq, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/notifications/%s", id), nil)
+		wQuery := httptest.NewRecorder()
+
+		r.ServeHTTP(wQuery, queryReq)
+
+		var queryResp map[string]any
+		_ = json.Unmarshal(wQuery.Body.Bytes(), &queryResp)
+
+		finalStatus := queryResp["status"].(string)
+		// It might be PENDING, PROCESSING, or SENT depending on how quickly the test worker picks it up
+		if finalStatus == "SCHEDULED" {
+			t.Errorf("expected status to transition away from SCHEDULED, got %s", finalStatus)
 		}
 	})
 }

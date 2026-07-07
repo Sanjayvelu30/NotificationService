@@ -337,6 +337,61 @@
             color: var(--text-secondary);
         }
 
+        /* Toggle Switch & Date Picker */
+        .toggle-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-container input {
+            display: none;
+        }
+
+        .toggle-slider {
+            width: 44px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: 99px;
+            position: relative;
+            margin-right: 0.75rem;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        .toggle-slider::before {
+            content: "";
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .toggle-container input:checked + .toggle-slider {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        .toggle-container input:checked + .toggle-slider::before {
+            transform: translateX(20px);
+        }
+
+        .toggle-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
         /* Action Buttons */
         button {
             width: 100%;
@@ -525,7 +580,19 @@
                             <label>Template Variables</label>
                             <div class="variable-inputs" id="variableFields">
                                 Select a template to view variables.
-                            </div>
+                        </div>
+
+                        <div class="form-group toggle-group">
+                            <label class="toggle-container">
+                                <input type="checkbox" id="scheduleToggle">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">Schedule for later?</span>
+                            </label>
+                        </div>
+
+                        <div class="form-group" id="executeAtContainer" style="display: none;">
+                            <label for="executeAt">Execution Time</label>
+                            <input type="datetime-local" id="executeAt">
                         </div>
 
                         <button type="submit" id="submitBtn">
@@ -928,6 +995,22 @@
             }
         });
 
+        // Toggle schedule picker UI
+        const scheduleToggle = document.getElementById("scheduleToggle");
+        const executeAtContainer = document.getElementById("executeAtContainer");
+        const executeAtInput = document.getElementById("executeAt");
+
+        scheduleToggle.addEventListener("change", () => {
+            if (scheduleToggle.checked) {
+                executeAtContainer.style.display = "block";
+                executeAtInput.required = true;
+            } else {
+                executeAtContainer.style.display = "none";
+                executeAtInput.required = false;
+                executeAtInput.value = "";
+            }
+        });
+
         // Dispatch Submit
         dispatchForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -943,7 +1026,13 @@
                 variable[input.dataset.key] = input.value.trim();
             });
 
-            logToTerminal(`EVENT: Initiating ${type} notification to ${recipient}...`, "info");
+            // Handle optional execution schedule
+            let execute_at = "";
+            if (scheduleToggle.checked && executeAtInput.value) {
+                execute_at = new Date(executeAtInput.value).toISOString();
+            }
+
+            logToTerminal(`EVENT: Initiating ${type} notification to ${recipient}${execute_at ? ` scheduled for ${execute_at}` : ''}...`, "info");
             try {
                 const response = await fetch("/api/v1/notifications", {
                     method: "POST",
@@ -951,7 +1040,7 @@
                         "Content-Type": "application/json",
                         "Authorization": `Bearer ${accessToken}`
                     },
-                    body: JSON.stringify({ recipient, type, template, variable })
+                    body: JSON.stringify({ recipient, type, template, variable, execute_at })
                 });
 
                 incrementQuota();
@@ -962,9 +1051,22 @@
                 localHistory.unshift(data);
                 updateHistoryTable();
                 
-                showSuccess(`Notification dispatched! ID: ${data.id}`);
-                logToTerminal(`SUCCESS: Job accepted by queue. ID: ${data.id}. Status: PENDING`, "success");
-                startPolling(data.id);
+                showSuccess(execute_at ? `Notification scheduled successfully! ID: ${data.id}` : `Notification dispatched! ID: ${data.id}`);
+                
+                if (data.status === "SCHEDULED") {
+                    logToTerminal(`SUCCESS: Job accepted by scheduler. ID: ${data.id}. Status: SCHEDULED`, "success");
+                } else {
+                    logToTerminal(`SUCCESS: Job accepted by queue. ID: ${data.id}. Status: PENDING`, "success");
+                    startPolling(data.id);
+                }
+
+                // Reset scheduling elements
+                dispatchForm.reset();
+                scheduleToggle.checked = false;
+                executeAtContainer.style.display = "none";
+                executeAtInput.required = false;
+                executeAtInput.value = "";
+                updateVariables(); // reload dynamic template inputs
             } catch (err) {
                 showError(err.message);
                 logToTerminal(`ERROR: Dispatch failed: ${err.message}`, "error");

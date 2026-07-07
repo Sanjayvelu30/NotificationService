@@ -140,6 +140,8 @@ type NotificationSystem struct {
 	QueueSize            int
 	ShuttingDown         atomic.Bool
 	DLQRepo              repository.DLQRepo
+	SchedulerURL         string
+	SchedulerAPIKey      string
 }
 
 func (n *NotificationSystem) Process(notification domain.Notification) {
@@ -226,7 +228,7 @@ func (n *NotificationSystem) Start() {
 	slog.Info("worker pool started", "workers", n.WorkerCount)
 }
 
-func (n *NotificationSystem) CreateNotification(templateName string, variable map[string]string, notificationType domain.NotificationType, recipient string, userID string) (domain.Notification, error) {
+func (n *NotificationSystem) CreateNotification(templateName string, variable map[string]string, notificationType domain.NotificationType, recipient string, userID string, executeAt time.Time) (domain.Notification, error) {
 	if n.ShuttingDown.Load() {
 		return domain.Notification{}, fmt.Errorf("notification system is shutting down")
 	}
@@ -246,6 +248,13 @@ func (n *NotificationSystem) CreateNotification(templateName string, variable ma
 		return domain.Notification{}, fmt.Errorf("invalid template name: %w", err)
 	}
 
+	status := domain.Pending
+	nextRetry := time.Now()
+	if !executeAt.IsZero() {
+		status = domain.Scheduled
+		nextRetry = executeAt
+	}
+
 	id := uuid.NewString()
 	notification := domain.Notification{
 		ID:          id,
@@ -255,8 +264,8 @@ func (n *NotificationSystem) CreateNotification(templateName string, variable ma
 		RetryCount:  0,
 		CreatedAt:   time.Now(),
 		Type:        notificationType,
-		Status:      domain.Pending,
-		NextRetryAt: time.Now(), // Process immediately
+		Status:      status,
+		NextRetryAt: nextRetry,
 		UserID:      userID,
 	}
 
@@ -264,12 +273,17 @@ func (n *NotificationSystem) CreateNotification(templateName string, variable ma
 		return domain.Notification{}, err
 	}
 
-	select {
-	case n.NotificationChannel <- notification:
-		return notification, nil
-	case <-n.Ctx.Done():
-		return domain.Notification{}, fmt.Errorf("notification system stopped")
+	// Only enqueue immediately if it's not scheduled for a future date/time
+	if executeAt.IsZero() {
+		select {
+		case n.NotificationChannel <- notification:
+			return notification, nil
+		case <-n.Ctx.Done():
+			return domain.Notification{}, fmt.Errorf("notification system stopped")
+		}
 	}
+
+	return notification, nil
 }
 
 func (n *NotificationSystem) Shutdown() {
@@ -307,4 +321,51 @@ func (n *NotificationSystem) RetryScheduler() {
 			}
 		}
 	}
+}
+
+func (n *NotificationSystem) ScheduleNotification(notification domain.Notification, executeAt time.Time) error {
+	slog.Info("delegating scheduled notification to Task Scheduler microservice", "id", notification.ID, "executeAt", executeAt)
+
+	// Callback URL points back to our internal notifications callback endpoint
+	callbackURL := "http://notification-service:8080/api/v1/internal/notifications/" + notification.ID + "/dispatch"
+
+	taskPayload := map[string]any{
+		"id":           "task_notif_" + notification.ID,
+		"title":        "Trigger Notification Dispatch: " + notification.ID,
+		"description":  "Callback trigger enqueuing notification for " + notification.Recipient,
+		"callback_url": callbackURL,
+		"payload":      "{}", // Task Scheduler doesn't need to pass parameters back since we pull by ID
+		"execute_at":   executeAt.Format(time.RFC3339),
+		"max_retries":  3,
+	}
+
+	payloadBytes, err := json.Marshal(taskPayload)
+	if err != nil {
+		return fmt.Errorf("marshal scheduler task payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", n.SchedulerURL+"/tasks", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("create scheduler HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if n.SchedulerAPIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+n.SchedulerAPIKey)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("execute scheduler HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		var errMap map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&errMap)
+		return fmt.Errorf("scheduler returned non-2xx status code %d: %v", resp.StatusCode, errMap)
+	}
+
+	slog.Info("successfully scheduled task with Task Scheduler", "id", notification.ID)
+	return nil
 }

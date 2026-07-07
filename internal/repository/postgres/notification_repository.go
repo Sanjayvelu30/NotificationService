@@ -87,7 +87,7 @@ func (r *NotificationRepository) Get(id string, userID string) (domain.Notificat
 		SELECT id, recipient, template, variable, retry_count,
 		       created_at, type, status, next_retry_at, user_id, error_message
 		FROM notifications
-		WHERE id = $1 AND (user_id = $2 OR user_id = 'global')`
+		WHERE id = $1 AND ($2 = 'system' OR user_id = $2 OR user_id = 'global')`
 
 	var n domain.Notification
 	var varBytes []byte

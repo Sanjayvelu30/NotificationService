@@ -39,6 +39,9 @@ func New(
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
+	// Webhook callbacks from Task Scheduler (bypasses Auth0 JWT validation, uses API key auth internally)
+	r.POST("/api/v1/internal/notifications/:id/dispatch", notificationHandler.DispatchCallback)
+
 	v1 := r.Group("/api/v1")
 	v1.Use(authMiddleware)
 	{

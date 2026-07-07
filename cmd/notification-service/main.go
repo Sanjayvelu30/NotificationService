@@ -74,6 +74,8 @@ func main() {
 		TemplateRepo:        templateRepo,
 		IdempotencyRepo:     idempotencyRepo,
 		DLQRepo:             dlqRepo,
+		SchedulerURL:        cfg.SchedulerURL,
+		SchedulerAPIKey:     cfg.SchedulerAPIKey,
 		NotificationStrategy: map[domain.NotificationType]service.NotificationSender{
 			domain.Email: &service.EmailSender{
 				TemplateRepo: templateRepo,
