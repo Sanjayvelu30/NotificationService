@@ -1,0 +1,89 @@
+services:
+  # 1. Notification Engine Microservice
+  - type: web
+    name: notification-service
+    env: docker
+    dockerfilepath: Dockerfile.notification
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: notification-db
+          property: connectionString
+      - key: HTTP_ADDR
+        value: :8080
+      - key: WORKER_COUNT
+        value: "5"
+      - key: RATE_LIMIT_MAX
+        value: "20"
+      - key: RATE_LIMIT_DURATION
+        value: 24h
+      - key: RESEND_API_KEY
+        sync: false # User enters manually in Render dashboard
+      - key: AUTH0_DOMAIN
+        value: dev-i6avz7x124upwug6.us.auth0.com
+      - key: EMAIL_FROM
+        value: no-reply@sanjayvelu.online
+      - key: SCHEDULER_URL
+        value: http://task-scheduler:10000
+      - key: SCHEDULER_API_KEY
+        value: test_api_key_12345
+
+  # 2. Task Scheduler Microservice
+  - type: web
+    name: task-scheduler
+    env: docker
+    dockerfilepath: Dockerfile.scheduler
+    plan: free
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: notification-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: notification-db
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: notification-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: notification-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: notification-db
+          property: database
+      - key: DB_SSLMODE
+        value: require
+      - key: REDIS_HOST
+        fromService:
+          name: redis-cache
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: redis-cache
+          type: redis
+          property: port
+      - key: REDIS_PASSWORD
+        value: ""
+      - key: WORKER_COUNT
+        value: "5"
+      - key: QUEUE_CAPACITY
+        value: "10"
+      - key: SCHEDULER_API_KEY
+        value: test_api_key_12345
+
+# 3. Managed PostgreSQL Database
+databases:
+  - name: notification-db
+    plan: free
+
+# 4. Managed Redis Cache
+redis:
+  - name: redis-cache
+    plan: free
+    ipAllowList: [] # Allow internal access only
