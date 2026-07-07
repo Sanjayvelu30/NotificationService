@@ -1,0 +1,45 @@
+# Step 1: Build the binary
+FROM golang:1.22-alpine AS builder
+
+# Install build dependencies, CA certificates, and timezone data
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /app
+
+# Cache dependencies: Copy only go.mod and go.sum first
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the source code
+COPY . .
+
+# Build a statically linked binary and strip debugging symbols
+# Note: The entrypoint package is located in cmd/task-scheduler/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/scheduler cmd/task-scheduler/main.go
+
+# Step 2: Create the minimal production image
+FROM alpine:3.20
+
+# Run the app as a secure, non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy CA certificates and timezone data from the builder stage
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+WORKDIR /app
+
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/scheduler .
+
+# Enforce file permissions for the non-root user
+RUN chown -R appuser:appgroup /app
+
+# Switch to the non-root user
+USER appuser
+
+# Document that the service listens on port 8080
+EXPOSE 8080
+
+# Execute the binary
+ENTRYPOINT ["/app/scheduler"]

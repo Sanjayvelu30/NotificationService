@@ -51,18 +51,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Downcase Image Name Reference
+      - name: Downcase Image Name References
         id: prep
         run: |
-          IMAGE_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "image_name=ghcr.io/${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "notif_image=ghcr.io/${OWNER_LOWER}/notificationservice" >> $GITHUB_OUTPUT
+          echo "sched_image=ghcr.io/${OWNER_LOWER}/taskscheduler" >> $GITHUB_OUTPUT
 
-      - name: Build and Push Docker Image
+      - name: Build and Push Notification Service Image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.notification
           push: true
           tags: |
-            ${{ steps.prep.outputs.image_name }}:latest
-            ${{ steps.prep.outputs.image_name }}:${{ github.sha }}
+            ${{ steps.prep.outputs.notif_image }}:latest
+            ${{ steps.prep.outputs.notif_image }}:${{ github.sha }}
+
+      - name: Build and Push Task Scheduler Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.scheduler
+          push: true
+          tags: |
+            ${{ steps.prep.outputs.sched_image }}:latest
+            ${{ steps.prep.outputs.sched_image }}:${{ github.sha }}
