@@ -229,8 +229,8 @@
 
         <div class="card">
             <div class="logo">⚡</div>
-            <h1>Notification Engine Monolith</h1>
-            <p class="tagline">An enterprise-grade Go notification scheduler demonstrating advanced transactional database locking, fault-tolerant worker pools, and secure multi-tenant isolation.</p>
+            <h1>Notification Service & Task Scheduler</h1>
+            <p class="tagline">An enterprise-grade Go monorepo demonstrating distributed webhook task scheduling, PostgreSQL transactional concurrency queue, Auth0 multi-tenant isolation, and user-scoped rate limiting.</p>
 
             <div class="features-grid">
                 <div class="feature-card">
@@ -238,8 +238,8 @@
                     <div class="feature-desc">Utilizes PostgreSQL `SKIP LOCKED` transactional locking queries to safely scale poller worker threads without double-delivery risks.</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-title">🔄 Exponential Backoff</div>
-                    <div class="feature-desc">Scales retries automatically with configurable wait timings (2<sup>retry_count</sup> sec) to protect API resources from flood traffic.</div>
+                    <div class="feature-title">📅 Webhook Task Scheduler</div>
+                    <div class="feature-desc">Delegates dynamic calendar schedules to an internal Task Scheduler microservice utilizing Redis caches and secure callback handshakes.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-title">🔒 Auth0 Identity Security</div>
@@ -250,8 +250,8 @@
                     <div class="feature-desc">Shields resources from account abuse using custom fixed-window rate limiting scoped directly to your validated user ID.</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-title">📁 Customizable Templates</div>
-                    <div class="feature-desc">Saves template modifications directly to PostgreSQL, isolated securely per tenant using composite primary key indexing constraints.</div>
+                    <div class="feature-title">🔄 Exponential Backoff</div>
+                    <div class="feature-desc">Scales retries automatically with configurable wait timings (2<sup>retry_count</sup> sec) to protect API resources from flood traffic.</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-title">📩 Resend Email Integration</div>
