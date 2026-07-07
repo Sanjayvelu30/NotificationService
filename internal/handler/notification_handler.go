@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ type createNotificationRequest struct {
 	Template  string            `json:"template" binding:"required"`
 	Variable  map[string]string `json:"variable"`
 	Type      string            `json:"type" binding:"required"`
+	ExecuteAt string            `json:"execute_at"`
 }
 
 type notificationResponse struct {
@@ -51,6 +53,20 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	var executeTime time.Time
+	if req.ExecuteAt != "" {
+		var err error
+		executeTime, err = time.Parse(time.RFC3339, req.ExecuteAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid execute_at timestamp: must be RFC3339 format"})
+			return
+		}
+		if executeTime.Before(time.Now()) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "execute_at must be in the future"})
+			return
+		}
+	}
+
 	userID, _ := c.Get("user_id")
 	userIDStr, _ := userID.(string)
 
@@ -60,10 +76,22 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		nType,
 		strings.TrimSpace(req.Recipient),
 		userIDStr,
+		executeTime,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	if !executeTime.IsZero() {
+		if err := h.system.ScheduleNotification(notification, executeTime); err != nil {
+			// Clean up saved scheduled record on delegate error
+			notification.Status = domain.DLQ
+			notification.ErrorMessage = "failed to schedule task: " + err.Error()
+			_ = h.system.NotificationRepo.Update(notification)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delegate scheduled task: " + err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusAccepted, toResponse(notification))
@@ -106,5 +134,45 @@ func toResponse(n domain.Notification) notificationResponse {
 		Status:       string(n.Status),
 		NextRetryAt:  n.NextRetryAt.UTC().Format(time.RFC3339),
 		ErrorMessage: n.ErrorMessage,
+	}
+}
+
+func (h *NotificationHandler) DispatchCallback(c *gin.Context) {
+	// Validate authorization token header matches SCHEDULER_API_KEY
+	authHeader := c.GetHeader("Authorization")
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" || parts[1] != h.system.SchedulerAPIKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized callback access"})
+		return
+	}
+
+	id := c.Param("id")
+	// Pull the notification using the "system" bypass token
+	notification, err := h.system.NotificationRepo.Get(id, "system")
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "notification record not found"})
+		return
+	}
+
+	if notification.Status != domain.Scheduled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("notification is in %s state; must be SCHEDULED to trigger", notification.Status)})
+		return
+	}
+
+	// Transition status to PENDING and trigger immediately
+	notification.Status = domain.Pending
+	notification.NextRetryAt = time.Now()
+
+	if err := h.system.NotificationRepo.Update(notification); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update notification: " + err.Error()})
+		return
+	}
+
+	// Push directly to the background processing channel queue
+	select {
+	case h.system.NotificationChannel <- notification:
+		c.JSON(http.StatusOK, gin.H{"status": "dispatched"})
+	default:
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "system channels saturated; dispatch deferred to poller"})
 	}
 }

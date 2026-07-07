@@ -17,6 +17,8 @@ type Config struct {
 	RateLimitDuration time.Duration
 	Auth0Domain       string
 	EmailFrom         string
+	SchedulerURL      string
+	SchedulerAPIKey   string
 }
 
 func Load() (Config, error) {
@@ -43,6 +45,8 @@ func Load() (Config, error) {
 		RateLimitDuration: rlDuration,
 		Auth0Domain:       getEnv("AUTH0_DOMAIN", "dev-i6avz7x124upwug6.us.auth0.com"),
 		EmailFrom:         getEnv("EMAIL_FROM", "no-reply@sanjayvelu.online"),
+		SchedulerURL:      getEnv("SCHEDULER_URL", "http://localhost:8081"),
+		SchedulerAPIKey:   getEnv("SCHEDULER_API_KEY", "test_api_key_12345"),
 	}, nil
 }
 

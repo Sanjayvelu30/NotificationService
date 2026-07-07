@@ -19,6 +19,13 @@ func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	cfg.MinConns = 2
 	cfg.MaxConnLifetime = time.Hour
 	cfg.MaxConnIdleTime = 30 * time.Minute
+	// CRITICAL SYSTEM ARCHITECTURE DECISION:
+	// We force pgx to use Simple Protocol Mode (pgx.QueryExecModeSimpleProtocol).
+	// This prevents the driver from caching prepared statements.
+	// When executing queries through transaction-level connection poolers (like PgBouncer
+	// on Supabase Port 6543), consecutive queries are routed randomly to different
+	// server connections. Utilizing Extended Protocol/Prepared Statements here would trigger
+	// "prepared statement already exists" (SQLSTATE 42P05) or mismatch compilation errors.
 	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)

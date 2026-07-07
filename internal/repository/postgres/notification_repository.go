@@ -24,6 +24,13 @@ func (r *NotificationRepository) Save(n domain.Notification) error {
 	if err != nil {
 		return fmt.Errorf("marshal variables: %w", err)
 	}
+	// SYSTEM INTEGRATION DECISION:
+	// We explicitly convert JSON byte slices into string format.
+	// Since our pgx connection pool runs in Simple Protocol mode to maintain
+	// PgBouncer compatibility, passing a raw []byte causes pgx to serialize it
+	// as a binary hex payload (\x7b...). Converting it to a Go string allows
+	// PostgreSQL to correctly parse and cast the string payload into the target
+	// JSONB database column.
 	varString := string(varBytes)
 
 	query := `
@@ -55,6 +62,8 @@ func (r *NotificationRepository) Update(n domain.Notification) error {
 	if err != nil {
 		return fmt.Errorf("marshal variables: %w", err)
 	}
+	// SYSTEM INTEGRATION DECISION:
+	// Convert json bytes to string for Simple Protocol compatibility with PostgreSQL JSONB column.
 	varString := string(varBytes)
 
 	query := `
@@ -78,7 +87,7 @@ func (r *NotificationRepository) Get(id string, userID string) (domain.Notificat
 		SELECT id, recipient, template, variable, retry_count,
 		       created_at, type, status, next_retry_at, user_id, error_message
 		FROM notifications
-		WHERE id = $1 AND (user_id = $2 OR user_id = 'global')`
+		WHERE id = $1 AND ($2 = 'system' OR user_id = $2 OR user_id = 'global')`
 
 	var n domain.Notification
 	var varBytes []byte
@@ -106,8 +115,12 @@ func (r *NotificationRepository) Get(id string, userID string) (domain.Notificat
 }
 
 func (r *NotificationRepository) GetReadyJobs() ([]domain.Notification, error) {
-	// Atomically updates pending notifications ready to retry/send to PROCESSING,
-	// using FOR UPDATE SKIP LOCKED to prevent race conditions.
+	// CRITICAL SYSTEM CONCURRENCY DECISION:
+	// We claim ready jobs atomically in a single UPDATE query.
+	// By using a nested subquery with FOR UPDATE SKIP LOCKED, we acquire a row lock
+	// on up to 50 pending notifications. Any other concurrent backend server instance
+	// running this query will ignore (skip) these locked rows, preventing double-processing
+	// race conditions. This enables safe, horizontally scalable queue pollers.
 	query := `
 		UPDATE notifications
 		SET status = 'PROCESSING'

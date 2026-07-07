@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: notification-postgres
     environment:
       POSTGRES_USER: notification
       POSTGRES_PASSWORD: notification
@@ -15,8 +16,22 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    build: .
+  redis:
+    image: redis:7-alpine
+    container_name: notification-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.notification
+    container_name: notification-app
     ports:
       - "8080:8080"
     environment:
@@ -27,8 +42,35 @@ services:
       RATE_LIMIT_DURATION: "24h"
       RESEND_API_KEY: "${RESEND_API_KEY}"
       AUTH0_DOMAIN: "dev-i6avz7x124upwug6.us.auth0.com"
+      EMAIL_FROM: "no-reply@sanjayvelu.online"
     depends_on:
       postgres:
+        condition: service_healthy
+
+  task-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    container_name: scheduler-app
+    ports:
+      - "8081:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: notification
+      DB_PASSWORD: notification
+      DB_NAME: notification
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      WORKER_COUNT: "5"
+      QUEUE_CAPACITY: "10"
+      SCHEDULER_API_KEY: "test_api_key_12345"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

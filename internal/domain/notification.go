@@ -27,6 +27,7 @@ const (
 	Processing NotificationStatus = "PROCESSING"
 	Sent       NotificationStatus = "SENT"
 	DLQ        NotificationStatus = "DLQ"
+	Scheduled  NotificationStatus = "SCHEDULED"
 )
 
 type Notification struct {
